@@ -1,0 +1,138 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String        @id @default(cuid())
+  username    String        @unique
+  email       String        @unique
+  password    String
+  characters  Character[]
+}
+
+model Character {
+  id          String        @id @default(cuid())
+  name        String
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+
+  money       Int           @default(500)
+  day         String        @default("Monday")
+  time        Int           @default(8)
+
+  stats       Stats[]
+  girlfriends Girlfriend[]
+  jobs        Job[]         @relation("CharacterJobs")
+
+  locationId  String?
+  location    Location?     @relation(fields: [locationId], references: [id])
+}
+
+model Stats {
+  id          String        @id @default(cuid())
+
+  characterId String
+  character   Character     @relation(fields: [characterId], references: [id])
+
+  str         Int?
+  dex         Int?
+  int         Int?
+  char        Int?
+
+  weight      Int?
+  height      Int?
+}
+
+model Girlfriend {
+  id          String        @id @default(cuid())
+  name        String
+
+  characterId String
+  character   Character     @relation(fields: [characterId], references: [id])
+
+  gfStats     GfStats[]
+  jobs        Job[]         @relation("GirlfriendJobs")
+
+  corruption  Int           @default(0)
+  affection   Int           @default(75)
+
+  locationId  String?
+  location    Location?     @relation(fields: [locationId], references: [id])
+}
+
+model GfStats {
+  id          String        @id @default(cuid())
+
+  gfId        String
+  girlFriend  Girlfriend    @relation(fields: [gfId], references: [id])
+
+  str         Int?
+  dex         Int?
+  int         Int?
+  char        Int?
+
+  weight      Int?
+  height      Int?
+}
+
+model Job {
+  id          String         @id @default(cuid())
+  name        String
+  requirement String?
+
+  level       Int            @default(1)
+  xpNeeded    Int            @default(50)          
+  xpGained    Int            @default(10)
+
+  length      Int
+  money       Int
+  
+  characters  Character[]    @relation("CharacterJobs")
+  girlfriends Girlfriend[]   @relation("GirlfriendJobs")
+}
+
+model Activity {
+  id          String        @id @default(cuid())
+
+  name        String
+  requirement String?
+  description String
+
+  img         String?
+
+  level       Int?          @default(1)
+  xpNeeded    Int?          @default(50)
+  xpGained    Int?          @default(10)
+
+  length      Int
+  reward      Int?
+
+  location    Location []  @relation("LocationActivity")
+}
+
+model Location {
+  id          String        @id @default(cuid())
+  name        String
+
+  img         String?
+
+  requirement String?
+  description String
+
+  activity    Activity[]    @relation("LocationActivity")
+
+  characters  Character[]
+  girlfriends Girlfriend[]
+}
