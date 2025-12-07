@@ -41,18 +41,20 @@ model Character {
 }
 
 model Stats {
-  id          String        @id @default(cuid())
+  id           String       @id @default(cuid())
 
-  characterId String
-  character   Character     @relation(fields: [characterId], references: [id])
+  characterId  String?
+  character    Character?   @relation(fields: [characterId], references: [id])
+  girlfriendId String?
+  girlfriend   Girlfriend?  @relation(fields: [girlfriendId], references: [id])
 
-  str         Int?
-  dex         Int?
-  int         Int?
-  char        Int?
+  str          Int?
+  dex          Int?
+  int          Int?
+  char         Int?
 
-  weight      Int?
-  height      Int?
+  weight       Int?
+  height       Int?
 }
 
 model Girlfriend {
@@ -62,7 +64,7 @@ model Girlfriend {
   characterId String
   character   Character     @relation(fields: [characterId], references: [id])
 
-  gfStats     GfStats[]
+  stats       Stats[]
   jobs        Job[]         @relation("GirlfriendJobs")
 
   corruption  Int           @default(0)
@@ -70,21 +72,6 @@ model Girlfriend {
 
   locationId  String?
   location    Location?     @relation(fields: [locationId], references: [id])
-}
-
-model GfStats {
-  id          String        @id @default(cuid())
-
-  gfId        String
-  girlFriend  Girlfriend    @relation(fields: [gfId], references: [id])
-
-  str         Int?
-  dex         Int?
-  int         Int?
-  char        Int?
-
-  weight      Int?
-  height      Int?
 }
 
 model Job {
