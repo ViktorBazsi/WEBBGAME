@@ -33,3 +33,17 @@ export const deleteLocation = async (id) => {
   await prisma.location.delete({ where: { id } });
   return true;
 };
+
+export const addActivityToLocation = async (locationId, activityId) => {
+  await getLocation(locationId);
+  const activity = await prisma.activity.findUnique({ where: { id: activityId } });
+  if (!activity) throw new HttpError("Activity nem található", 404);
+
+  return prisma.location.update({
+    where: { id: locationId },
+    data: {
+      activity: { connect: { id: activityId } },
+    },
+    include: { activity: true },
+  });
+};

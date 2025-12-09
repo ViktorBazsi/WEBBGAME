@@ -26,6 +26,9 @@ export const getActivityById = async (req, res, next) => {
 
 export const postActivity = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin hozhat létre aktivitást" });
+    }
     const data = await createActivity(req.body);
     return res.status(201).json(data);
   } catch (err) {
@@ -35,6 +38,9 @@ export const postActivity = async (req, res, next) => {
 
 export const patchActivity = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin módosíthat aktivitást" });
+    }
     const data = await updateActivity(req.params.id, req.body);
     return res.json(data);
   } catch (err) {
@@ -44,6 +50,9 @@ export const patchActivity = async (req, res, next) => {
 
 export const removeActivity = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin törölhet aktivitást" });
+    }
     await deleteActivity(req.params.id);
     return res.status(204).send();
   } catch (err) {

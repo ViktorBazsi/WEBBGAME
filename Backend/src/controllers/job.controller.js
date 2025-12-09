@@ -20,6 +20,9 @@ export const getJobById = async (req, res, next) => {
 
 export const postJob = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin hozhat létre munkát" });
+    }
     const data = await createJob(req.body);
     return res.status(201).json(data);
   } catch (err) {
@@ -29,6 +32,9 @@ export const postJob = async (req, res, next) => {
 
 export const patchJob = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin módosíthat munkát" });
+    }
     const data = await updateJob(req.params.id, req.body);
     return res.json(data);
   } catch (err) {
@@ -38,6 +44,9 @@ export const patchJob = async (req, res, next) => {
 
 export const removeJob = async (req, res, next) => {
   try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Csak admin törölhet munkát" });
+    }
     await deleteJob(req.params.id);
     return res.status(204).send();
   } catch (err) {

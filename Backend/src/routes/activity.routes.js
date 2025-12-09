@@ -13,8 +13,8 @@ const router = Router();
 router.use(authMiddleware);
 router.get("/", getActivities);
 router.get("/:id", getActivityById);
-router.post("/", postActivity);
-router.patch("/:id", patchActivity);
-router.delete("/:id", removeActivity);
+router.post("/", postActivity); // admin-only in controller
+router.patch("/:id", patchActivity); // admin-only in controller
+router.delete("/:id", removeActivity); // admin-only in controller
 
 export default router;

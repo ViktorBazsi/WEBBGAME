@@ -6,6 +6,7 @@ import {
   postLocation,
   patchLocation,
   removeLocation,
+  addActivityToLoc,
 } from "../controllers/location.controller.js";
 
 const router = Router();
@@ -13,8 +14,9 @@ const router = Router();
 router.use(authMiddleware);
 router.get("/", getLocations);
 router.get("/:id", getLocationById);
-router.post("/", postLocation);
-router.patch("/:id", patchLocation);
-router.delete("/:id", removeLocation);
+router.post("/", postLocation); // admin-only in controller
+router.patch("/:id", patchLocation); // admin-only in controller
+router.delete("/:id", removeLocation); // admin-only in controller
+router.post("/:id/activities", addActivityToLoc); // admin-only in controller
 
 export default router;

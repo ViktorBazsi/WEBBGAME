@@ -67,3 +67,19 @@ export const deleteCharacter = async (userId, id) => {
   await prisma.character.delete({ where: { id } });
   return true;
 };
+
+export const assignJobToCharacter = async (userId, characterId, jobId, isAdmin) => {
+  const character = await prisma.character.findFirst({
+    where: isAdmin ? { id: characterId } : { id: characterId, userId },
+  });
+  if (!character) throw new HttpError("Karakter nem található", 404);
+
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new HttpError("Munka nem található", 404);
+
+  return prisma.character.update({
+    where: { id: characterId },
+    data: { jobs: { connect: { id: jobId } } },
+    include: { jobs: true },
+  });
+};

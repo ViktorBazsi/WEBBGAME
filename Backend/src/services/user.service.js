@@ -85,6 +85,6 @@ export const deleteUser = async (id) => {
 
 export const listUsers = async () => {
   return prisma.user.findMany({
-    select: { id: true, username: true, email: true },
+    select: { id: true, username: true, email: true, role: true },
   });
 };

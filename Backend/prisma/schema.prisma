@@ -19,6 +19,7 @@ model User {
   username    String        @unique
   email       String        @unique
   password    String
+  role        Role          @default(USER)
   characters  Character[]
 }
 
@@ -44,9 +45,9 @@ model Stats {
   id           String       @id @default(cuid())
 
   characterId  String?
-  character    Character?   @relation(fields: [characterId], references: [id])
+  character    Character?   @relation(fields: [characterId], references: [id], onDelete: Cascade)
   girlfriendId String?
-  girlfriend   Girlfriend?  @relation(fields: [girlfriendId], references: [id])
+  girlfriend   Girlfriend?  @relation(fields: [girlfriendId], references: [id], onDelete: Cascade)
 
   str          Int?
   dex          Int?
@@ -61,14 +62,14 @@ model Girlfriend {
   id          String        @id @default(cuid())
   name        String
 
-  characterId String
-  character   Character     @relation(fields: [characterId], references: [id])
+  characterId String?
+  character   Character?    @relation(fields: [characterId], references: [id])
 
   stats       Stats[]
   jobs        Job[]         @relation("GirlfriendJobs")
 
   corruption  Int           @default(0)
-  affection   Int           @default(75)
+  affection   Int           @default(50)
 
   locationId  String?
   location    Location?     @relation(fields: [locationId], references: [id])
@@ -77,7 +78,14 @@ model Girlfriend {
 model Job {
   id          String         @id @default(cuid())
   name        String
+  jobType     String         @default("general")
   requirement String?
+  entryLevelXp Int           @default(0)
+  str         Int?
+  dex         Int?
+  int         Int?
+  char        Int?
+  spec        String?
 
   level       Int            @default(1)
   xpNeeded    Int            @default(50)          
@@ -94,6 +102,7 @@ model Activity {
   id          String        @id @default(cuid())
 
   name        String
+  @@unique([name])
   requirement String?
   description String
 
@@ -122,4 +131,9 @@ model Location {
 
   characters  Character[]
   girlfriends Girlfriend[]
+}
+
+enum Role {
+  USER
+  ADMIN
 }
