@@ -64,3 +64,60 @@ Gyors sorrend Insomniában
 5) POST execute (charId + subId, optional girlfriendId) -> nézd a progress/description/message
 6) Ha XP tele: POST /sleep (karakter/girlfriend) -> szintlépés
 7) Futass magasabb szintű subactivity-t újra (növelt STR-rel)
+
+
+ÚJ KÖR – Minimál end-to-end az activity/subactivity + lift + sleep logikához
+1) Auth
+   - Regisztrálj: POST /api/auth/register { "username": "tester", "email": "tester@mail.com", "password": "Pass123!" }
+   - DB-ben állítsd a user role-ját ADMIN-ra (egy lépésre kell az activity/subactivity create-hez).
+   - Token: POST /api/auth/login { "email": "tester@mail.com", "password": "Pass123!" } -> Bearer
+2) Activity + SubActivity (admin)
+   - POST /api/activities
+     { "name": "Strength Session", "description": "Edzés blokk", "length": 60 }
+   - POST /api/activities/{activityId}/subactivities
+     { "name": "Biceps Curl", "type": "STR", "xpGained": 20, "xpNeeded": 60, "description": "[name] [weight] kg-mal curl-öz. Mért bicepsz: [biceps]" }
+3) Character (user)
+   - POST /api/characters
+     { "name": "Hero", "gender": "MALE", "stats": { "str": 1, "dex": 1, "int": 1, "char": 1 } }
+4) Girlfriend (admin create, user assign)
+   - POST /api/girlfriends
+     { "name": "Anna", "stats": { "str": 1, "dex": 1, "int": 1, "char": 1 }, "characterId": null }
+   - Assign (user token): POST /api/girlfriends/{gfId}/assign { "characterId": "<charId>" }
+5) Execute subactivity
+   - Karakterrel: POST /api/activities/{charId}/subactivities/{subId}/execute
+     Body: {}  (nincs girlfriendId)
+   - Barátnővel: POST /api/activities/{charId}/subactivities/{subId}/execute
+     Body: { "girlfriendId": "<gfId>" }
+   Elvárt: progress.currentXp nő max xpNeeded-ig; message és description kitöltve measurement + lift adatokkal (weight/biceps).
+6) Lift lekérdezés
+   - GET /api/characters/{charId}/lifts
+   - GET /api/girlfriends/{gfId}/lifts
+7) Sleep + szintlépés
+   - POST /api/characters/{charId}/sleep
+   - POST /api/girlfriends/{gfId}/sleep
+   Elvárt: ha currentXp elérte a neededXp-t, szint +1, currXp nullázva, measurement frissül az új STR szinthez.
+
+
+ÚJ KÖR – Stamina / Treadmill / EnduranceCapacity
+Migráció neve: add-stamina-and-endurance (futtasd: npx prisma migrate dev --name add-stamina-and-endurance)
+1) Auth: ugyanaz (ADMIN token kell az activity/subactivity create-hez)
+2) Activity + SubActivity (STA)
+   - POST /api/activities
+     { "name": "Cardio", "description": "Futópados edzés", "length": 45 }
+   - POST /api/activities/{activityId}/subactivities
+     { "name": "Treadmill Run", "type": "STA", "xpGained": 20, "xpNeeded": 60, "staminaCost": 1,
+       "description": "[name] fut a futópadon, táv: [distanceKm] km" }
+3) Character
+   - POST /api/characters
+     { "name": "Runner", "gender": "MALE", "stats": { "str": 1, "dex": 1, "int": 1, "char": 1, "sta": 1 } }
+4) Execute STA subactivity
+   - POST /api/activities/{charId}/subactivities/{subId}/execute
+     Body: {}
+   Elvárt: currentStamina csökken (staminaCost), currStaXp nő xpNeeded-ig; treadmill esetén STR currXp is nő 3-as szintig; progress stat=STA.
+   Ha currentStamina < staminaCost → 400 hiba.
+5) Sleep + stamina refill
+   - POST /api/characters/{charId}/sleep
+   Elvárt: STA szintlépés, currStaXp nullázás, currentStamina feltöltve az aktuális/új STA szintre.
+6) EnduranceCapacity ellenőrzés (táv/time)
+   - GET /api/characters/{charId}/lifts  (STR alapú)
+   - (nincs külön endpoint endurance-re; ha kell, addj: GET /api/characters/{charId}/endurance és EnduranceCapacity lookup staLevel+gender alapján)

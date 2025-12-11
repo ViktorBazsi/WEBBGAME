@@ -1,5 +1,6 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
+import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 
 export const listActivities = () =>
   prisma.activity.findMany({ include: { location: true, subActivities: true } });
@@ -98,30 +99,13 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   }
 
   const performer = girlfriend ?? character;
-  let performerStats = performer.stats && performer.stats[0] ? performer.stats[0] : null;
-  if (!performerStats) {
-    performerStats = await prisma.stats.create({
-      data: girlfriend
-        ? { girlfriendId: performer.id }
-        : { characterId: performer.id },
-    });
-    // refresh performer stats with measurement
-    const refreshed = girlfriend
-      ? await prisma.girlfriend.findUnique({
-          where: { id: performer.id },
-          include: { stats: { include: { measurement: true } } },
-        })
-      : await prisma.character.findUnique({
-          where: { id: performer.id },
-          include: { stats: { include: { measurement: true } } },
-        });
-    performerStats = refreshed?.stats?.[0] || performerStats;
-  }
+  let performerStats = await ensureStatsWithMeasurement(performer, Boolean(girlfriend));
 
   const type = sub.type?.toUpperCase();
   const xpGain = sub.xpGained ?? 0;
+  const staminaCost = sub.staminaCost ?? 1;
 
-  if (!type || !["STR", "DEX", "INT", "CHAR"].includes(type)) {
+  if (!type || !["STR", "DEX", "INT", "CHAR", "STA"].includes(type)) {
     throw new HttpError("SubActivity type nincs beállítva vagy érvénytelen", 400);
   }
 
@@ -130,11 +114,17 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     DEX: { level: "dex", xp: "currDexXp" },
     INT: { level: "int", xp: "currIntXp" },
     CHAR: { level: "char", xp: "currCharXp" },
+    STA: { level: "sta", xp: "currStaXp" },
   };
 
   const { level, xp } = fieldMap[type];
   const currentLevel = performerStats[level] ?? 0;
   const currentXp = performerStats[xp] ?? 0;
+
+  // stamina költség
+  if ((performerStats.currentStamina ?? 0) < staminaCost) {
+    throw new HttpError("Nincs elég stamina az activity-hez", 400);
+  }
 
   const requirement = await prisma.statRequirement.findUnique({
     where: {
@@ -146,12 +136,34 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   let newXp = currentXp + xpGain;
   if (newXp > neededXp) newXp = neededXp;
 
+  // Speciális: treadmill run (STA típus, név tartalmazza) STR XP-t is ad lvl 3-ig
+  let strBoostXp = 0;
+  if (type === "STA" && sub.name.toLowerCase().includes("treadmill")) {
+    const currentStrXp = performerStats.currStrXp ?? 0;
+    const currentStrLevel = performerStats.str ?? 0;
+    const strRequirement = await prisma.statRequirement.findUnique({
+      where: { statType_level: { statType: "STR", level: currentStrLevel } },
+    });
+    const strNeeded = strRequirement?.neededXp ?? 999;
+    if (currentStrLevel < 3) {
+      const nextStrXp = Math.min(currentStrXp + 5, strNeeded); // treadmill futás csak 5 STR XP-t ad
+      strBoostXp = nextStrXp;
+    }
+  }
+
+  const updateData = {
+    [level]: currentLevel,
+    [xp]: newXp,
+    currentStamina: Math.max((performerStats.currentStamina ?? 0) - staminaCost, 0),
+  };
+  if (strBoostXp) {
+    updateData.str = performerStats.str ?? 0;
+    updateData.currStrXp = strBoostXp;
+  }
+
   await prisma.stats.update({
     where: { id: performerStats.id },
-    data: {
-      [level]: currentLevel,
-      [xp]: newXp,
-    },
+    data: updateData,
   });
 
   const updatedCharacter = await prisma.character.findUnique({
@@ -166,7 +178,16 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     : null;
 
   const performerName = girlfriend ? updatedGirlfriend?.name ?? girlfriend.name : updatedCharacter?.name ?? character.name;
+  const staminaAfter =
+    updateData.currentStamina ??
+    updatedCharacter?.stats?.[0]?.currentStamina ??
+    updatedGirlfriend?.stats?.[0]?.currentStamina ??
+    0;
+
   let message = `${performerName} végrehajtotta a ${sub.name} sub-activity-t.`;
+  if (staminaCost) {
+    message += ` Stamina költség: ${staminaCost}, maradék: ${staminaAfter}.`;
+  }
   const measurementGender = girlfriend
     ? updatedGirlfriend?.stats?.[0]?.measurement?.gender
     : updatedCharacter?.stats?.[0]?.measurement?.gender;
@@ -253,6 +274,8 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
       { token: "[weight]", value: String(measureMap.weight ?? "") },
       { token: "{{height}}", value: String(measureMap.height ?? "") },
       { token: "[height]", value: String(measureMap.height ?? "") },
+      { token: "{{distanceKm}}", value: "" },
+      { token: "[distanceKm]", value: "" },
     ];
     let rendered = template;
     for (const r of replacements) {
@@ -260,6 +283,34 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     }
     if (rendered && rendered !== template) {
       filledDescription = rendered;
+    }
+  }
+
+  // Endurance capacity (táv) hozzáadása üzenethez/placeholderekhez STA stat alapján
+  let distanceText = "";
+  const staLevel = girlfriend
+    ? updatedGirlfriend?.stats?.[0]?.sta
+    : updatedCharacter?.stats?.[0]?.sta;
+  if (staLevel != null) {
+    const endurance = await prisma.enduranceCapacity.findFirst({
+      where: {
+        staLevel,
+        gender: measurementGender,
+      },
+    });
+    if (endurance?.distanceKm != null) {
+      distanceText = `${endurance.distanceKm} km`;
+      message += ` Megtehető táv: ${distanceText}.`;
+      const template = filledDescription || sub.description || "";
+      const replacements = [
+        { token: "{{distanceKm}}", value: String(endurance.distanceKm) },
+        { token: "[distanceKm]", value: String(endurance.distanceKm) },
+      ];
+      let rendered = template;
+      for (const r of replacements) {
+        rendered = rendered.split(r.token).join(r.value);
+      }
+      if (rendered && rendered !== template) filledDescription = rendered;
     }
   }
 

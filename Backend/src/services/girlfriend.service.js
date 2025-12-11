@@ -1,5 +1,6 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
+import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 
 const ensureCharacterOwnership = async (userId, characterId, isAdmin = false) => {
   const character = await prisma.character.findFirst({
@@ -134,9 +135,13 @@ export const updateGirlfriend = async (userId, id, payload) => {
   });
 
   if (stats && gf.stats.length) {
+    const statsUpdate = { ...stats };
+    if (stats.sta != null && stats.currentStamina == null) {
+      statsUpdate.currentStamina = stats.sta;
+    }
     await prisma.stats.update({
       where: { id: gf.stats[0].id },
-      data: stats,
+      data: statsUpdate,
     });
     const level = stats.str ?? gf.stats[0].str ?? 1;
     await setMeasurementForStats(gf.stats[0].id, level, "FEMALE");
@@ -209,7 +214,7 @@ export const getGirlfriendLiftCapacity = async (userId, girlfriendId, isAdmin = 
   });
   if (!gf) throw new HttpError("Barátnő nem található vagy nincs jogosultság", 404);
 
-  const stats = gf.stats[0];
+  const stats = await ensureStatsWithMeasurement(gf, true);
   const strLevel = stats?.str ?? 0;
   const gender = stats?.measurement?.gender;
 
@@ -230,7 +235,7 @@ export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = 
   });
   if (!gf) throw new HttpError("Barátnő nem található vagy nincs jogosultság", 404);
 
-  const stats = gf.stats[0];
+  const stats = await ensureStatsWithMeasurement(gf, true);
   if (!stats) return gf;
 
   const types = [
@@ -238,6 +243,7 @@ export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = 
     { type: "DEX", levelKey: "dex", xpKey: "currDexXp" },
     { type: "INT", levelKey: "int", xpKey: "currIntXp" },
     { type: "CHAR", levelKey: "char", xpKey: "currCharXp" },
+    { type: "STA", levelKey: "sta", xpKey: "currStaXp" },
   ];
 
   const updates = {};
@@ -264,6 +270,11 @@ export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = 
     const newStrLevel = updates.str ?? stats.str ?? 1;
     await setMeasurementForStats(stats.id, newStrLevel, "FEMALE");
   }
+
+  await prisma.stats.update({
+    where: { id: stats.id },
+    data: { currentStamina: updates.sta ?? stats.sta ?? 1 },
+  });
 
   return getGirlfriend(userId, girlfriendId, { isAdmin: true, allowOrphan: true });
 };

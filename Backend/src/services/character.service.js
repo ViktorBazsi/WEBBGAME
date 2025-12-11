@@ -1,5 +1,6 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
+import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 
 export const listCharacters = async (userId) => {
   const chars = await prisma.character.findMany({
@@ -103,9 +104,13 @@ export const updateCharacter = async (userId, id, payload) => {
   });
 
   if (stats && updated.stats.length) {
+    const statsUpdate = { ...stats };
+    if (stats.sta != null && stats.currentStamina == null) {
+      statsUpdate.currentStamina = stats.sta;
+    }
     await prisma.stats.update({
       where: { id: updated.stats[0].id },
-      data: stats,
+      data: statsUpdate,
     });
     const level = stats.str ?? updated.stats[0].str ?? 1;
     await setMeasurementForStats(updated.stats[0].id, level, updated.gender);
@@ -155,7 +160,7 @@ export const getLiftCapacity = async (userId, characterId, isAdmin = false) => {
     include: { stats: { include: { measurement: true } } },
   });
   if (!character) throw new HttpError("Karakter nem található", 404);
-  const stats = character.stats[0];
+  const stats = await ensureStatsWithMeasurement(character, false);
   const strLevel = stats?.str ?? 0;
   const gender = stats?.measurement?.gender;
 
@@ -174,7 +179,7 @@ export const sleepAndLevelUp = async (userId, characterId, isAdmin = false) => {
   });
   if (!character) throw new HttpError("Karakter nem található vagy nincs jogosultság", 404);
 
-  const stats = character.stats[0];
+  const stats = await ensureStatsWithMeasurement(character, false);
   if (!stats) return character;
 
   const types = [
@@ -182,6 +187,7 @@ export const sleepAndLevelUp = async (userId, characterId, isAdmin = false) => {
     { type: "DEX", levelKey: "dex", xpKey: "currDexXp" },
     { type: "INT", levelKey: "int", xpKey: "currIntXp" },
     { type: "CHAR", levelKey: "char", xpKey: "currCharXp" },
+    { type: "STA", levelKey: "sta", xpKey: "currStaXp" },
   ];
 
   const updates = {};
@@ -208,6 +214,12 @@ export const sleepAndLevelUp = async (userId, characterId, isAdmin = false) => {
     const newStrLevel = updates.str ?? stats.str ?? 1;
     await setMeasurementForStats(stats.id, newStrLevel, character.gender);
   }
+
+  // stamina pool reset a szint szerinti maximumra
+  await prisma.stats.update({
+    where: { id: stats.id },
+    data: { currentStamina: updates.sta ?? stats.sta ?? 1 },
+  });
 
   return getCharacter(userId, characterId);
 };

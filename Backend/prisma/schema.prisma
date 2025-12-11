@@ -54,11 +54,15 @@ model Stats {
   dex          Int?
   int          Int?
   char         Int?
+  sta          Int?
 
   currStrXp    Int?       @default(0)
   currDexXp    Int?       @default(0)
   currIntXp    Int?       @default(0)
   currCharXp   Int?       @default(0)
+  currStaXp    Int?       @default(0)
+
+  currentStamina Int?     @default(1)
 
   measurementId String?
   measurement   Measurements? @relation(fields: [measurementId], references: [id], onDelete: SetNull)
@@ -144,6 +148,7 @@ model SubActivity {
   xpNeeded     Int?       @default(50)
   xpGained     Int?       @default(10)
   reward       Int?
+  staminaCost  Int?       @default(1)
 
   @@unique([activityId, name])
 }
@@ -177,11 +182,22 @@ model LiftCapacity {
   @@unique([strLevel, gender])
 }
 
+model EnduranceCapacity {
+  id           String  @id @default(cuid())
+  staLevel     Int
+  gender       Gender?
+  distanceKm   Int?
+  timeMinutes  Int?
+
+  @@unique([staLevel, gender])
+}
+
 enum StatType {
   STR
   DEX
   INT
   CHAR
+  STA
 }
 
 enum Gender {
