@@ -7,6 +7,8 @@ import {
   patchCharacter,
   removeCharacter,
   addJobForCharacter,
+  getCharacterLifts,
+  sleepCharacter,
 } from "../controllers/character.controller.js";
 
 const router = Router();
@@ -18,5 +20,7 @@ router.post("/", postCharacter);
 router.patch("/:id", patchCharacter);
 router.delete("/:id", removeCharacter);
 router.post("/:id/jobs", addJobForCharacter);
+router.get("/:id/lifts", getCharacterLifts);
+router.post("/:id/sleep", sleepCharacter);
 
 export default router;

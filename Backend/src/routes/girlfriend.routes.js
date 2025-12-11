@@ -9,6 +9,8 @@ import {
   removeGirlfriend,
   attachGirlfriendToCharacter,
   addJobForGirlfriend,
+  getGirlfriendLifts,
+  sleepGirlfriend,
 } from "../controllers/girlfriend.controller.js";
 
 const router = Router();
@@ -22,5 +24,7 @@ router.patch("/:id", patchGirlfriend); // admin-only in controller
 router.delete("/:id", removeGirlfriend); // admin-only in controller
 router.post("/:id/assign", attachGirlfriendToCharacter);
 router.post("/:id/jobs", addJobForGirlfriend);
+router.get("/:id/lifts", getGirlfriendLifts);
+router.post("/:id/sleep", sleepGirlfriend);
 
 export default router;

@@ -7,6 +7,8 @@ import {
   deleteGirlfriend,
   assignGirlfriendToCharacter,
   assignJobToGirlfriend,
+  getGirlfriendLiftCapacity,
+  sleepAndLevelUpGirlfriend,
 } from "../services/girlfriend.service.js";
 
 export const getAllGirlfriends = async (req, res, next) => {
@@ -96,6 +98,26 @@ export const addJobForGirlfriend = async (req, res, next) => {
     const { jobId } = req.body;
     const isAdmin = req.user.role === "ADMIN";
     const data = await assignJobToGirlfriend(req.user.id, req.params.id, jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const getGirlfriendLifts = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === "ADMIN";
+    const data = await getGirlfriendLiftCapacity(req.user.id, req.params.id, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const sleepGirlfriend = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === "ADMIN";
+    const data = await sleepAndLevelUpGirlfriend(req.user.id, req.params.id, isAdmin);
     return res.json(data);
   } catch (err) {
     return next(err);

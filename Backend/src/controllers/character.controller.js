@@ -5,6 +5,8 @@ import {
   updateCharacter,
   deleteCharacter,
   assignJobToCharacter,
+  getLiftCapacity,
+  sleepAndLevelUp,
 } from "../services/character.service.js";
 
 export const getAllCharacters = async (req, res, next) => {
@@ -57,6 +59,26 @@ export const addJobForCharacter = async (req, res, next) => {
     const { jobId } = req.body;
     const isAdmin = req.user?.role === "ADMIN";
     const data = await assignJobToCharacter(req.user.id, req.params.id, jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const getCharacterLifts = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await getLiftCapacity(req.user.id, req.params.id, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const sleepCharacter = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await sleepAndLevelUp(req.user.id, req.params.id, isAdmin);
     return res.json(data);
   } catch (err) {
     return next(err);

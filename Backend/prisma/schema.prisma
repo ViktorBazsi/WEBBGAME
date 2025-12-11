@@ -26,6 +26,7 @@ model User {
 model Character {
   id          String        @id @default(cuid())
   name        String
+  gender      Gender        @default(MALE)
   userId      String
   user        User          @relation(fields: [userId], references: [id])
 
@@ -54,13 +55,19 @@ model Stats {
   int          Int?
   char         Int?
 
-  weight       Int?
-  height       Int?
+  currStrXp    Int?       @default(0)
+  currDexXp    Int?       @default(0)
+  currIntXp    Int?       @default(0)
+  currCharXp   Int?       @default(0)
+
+  measurementId String?
+  measurement   Measurements? @relation(fields: [measurementId], references: [id], onDelete: SetNull)
 }
 
 model Girlfriend {
   id          String        @id @default(cuid())
   name        String
+  gender      Gender        @default(FEMALE)
 
   characterId String?
   character   Character?    @relation(fields: [characterId], references: [id])
@@ -103,19 +110,11 @@ model Activity {
 
   name        String
   @@unique([name])
-  requirement String?
-  description String
-
+  description String?
   img         String?
-
-  level       Int?          @default(1)
-  xpNeeded    Int?          @default(50)
-  xpGained    Int?          @default(10)
-
   length      Int
-  reward      Int?
-
   location    Location []  @relation("LocationActivity")
+  subActivities SubActivity[]
 }
 
 model Location {
@@ -131,6 +130,72 @@ model Location {
 
   characters  Character[]
   girlfriends Girlfriend[]
+}
+
+model SubActivity {
+  id           String     @id @default(cuid())
+  name         String
+  activityId   String
+  activity     Activity   @relation(fields: [activityId], references: [id])
+  type         String?
+  requirement  String?
+  description  String?
+  level        Int?       @default(1)
+  xpNeeded     Int?       @default(50)
+  xpGained     Int?       @default(10)
+  reward       Int?
+
+  @@unique([activityId, name])
+}
+
+model Measurements {
+  id         String   @id @default(cuid())
+  strLevel   Int
+  gender     Gender?
+  weight     Int?
+  height     Int?
+  biceps     Int?
+  quads      Int?
+  back       Int?
+  chest      Int?
+  calves     Int?
+
+  stats      Stats[]
+
+  @@unique([strLevel, gender])
+}
+
+model LiftCapacity {
+  id           String  @id @default(cuid())
+  strLevel     Int
+  gender       Gender?
+  bicepsCurl   Int?
+  benchPress   Int?
+  squat        Int?
+  latPulldown  Int?
+
+  @@unique([strLevel, gender])
+}
+
+enum StatType {
+  STR
+  DEX
+  INT
+  CHAR
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+model StatRequirement {
+  id        String   @id @default(cuid())
+  statType  StatType
+  level     Int
+  neededXp  Int
+
+  @@unique([statType, level])
 }
 
 enum Role {

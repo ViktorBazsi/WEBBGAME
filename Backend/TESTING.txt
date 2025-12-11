@@ -1,0 +1,66 @@
+GYORSTESZT – Activity/Subactivity + XP/Measurements/Lift
+
+Előkészítés
+- Migrációk futtatása (ha hiányzik): npx prisma migrate dev
+- Seed (Measurements, LiftCapacity, StatRequirement): node prisma/seed.js
+- Admin token: regisztrálj/loginolj, DB-ben állítsd role=ADMIN.
+
+Alap entitások
+- Activity (pl. Weight Training)
+  POST /api/activities
+  { "name": "Weight Training", "description": "Gym session", "length": 60 }
+
+- Subactivity-k (type=STR, xpGained=20, xpNeeded=60)
+  POST /api/activities/{activityId}/subactivities
+  { "name": "Biceps Curl", "type": "STR", "xpGained": 20, "xpNeeded": 60,
+    "description": "[name] éppen [weight] kg-mal bicepszezik (méret: [biceps])." }
+  (Ismételd: Bench Press, Squat, Lat Pulldown, stb.)
+
+- Character (USER vagy admin)
+  POST /api/characters
+  { "name": "Hero", "gender": "MALE", "stats": { "str": 1, "dex": 1, "int": 1, "char": 1 } }
+  (Measurement automatikus STR=1 + gender alapján)
+
+- Girlfriend (ADMIN create, USER assign)
+  POST /api/girlfriends
+  { "name": "Anna", "stats": { "str": 1, "dex": 1, "int": 1, "char": 1 }, "characterId": null }
+  Assign (USER): POST /api/girlfriends/{gfId}/assign { "characterId": "<charId>" }
+
+Használat / Teszt
+1) Listázz aktivitásokat: GET /api/activities (subActivities included)
+2) Futtass subactivity-t (XP nő a neededXp-ig, szintlépés nincs automatikusan):
+   POST /api/activities/{charId}/subactivities/{subId}/execute
+   Body (opcionális): { "girlfriendId": "<gfId>" }  // ha a barátnő hajtja végre
+   Válasz: character/girlfriend, message, description (kitöltött), progress {stat, level, currentXp, neededXp}
+   - weight placeholder: [weight] / {{weight}} (liftCapacity alapján)
+   - measurement placeholder: [biceps]/[chest]/[quads]/[back]/[calves]/[weight]/[height] (measurement alapján)
+   - ha currentXp elérte a neededXp-t, message-ben jelzi: “aludj egyet”
+
+3) Alvás + szintlépés:
+   - Karakter: POST /api/characters/{charId}/sleep
+   - Barátnő: POST /api/girlfriends/{gfId}/sleep
+   Ha currentXp >= neededXp, szintet lép, currXp nullázódik.
+
+4) Lift lekérdezés (gender + STR szerint):
+   - GET /api/characters/{charId}/lifts
+   - GET /api/girlfriends/{gfId}/lifts
+
+Minta szöveg a subactivity descriptionhöz (Insomnia-safe):
+- “[name] éppen [weight] kg-mal bicepszezik (méret: [biceps]).”
+- “[name] mért bicepsze: [biceps] cm, súly: [weight] kg.”
+
+Főbb endpointok (auth kell, admin a mutációkhoz)
+- Activity CRUD: /api/activities (list/get minden auth user, create/update/delete admin)
+- Subactivity CRUD: /api/activities/:id/subactivities (create/update/delete admin, list/get auth)
+- Execute: POST /api/activities/:charId/subactivities/:subId/execute (body: optional girlfriendId)
+- Sleep: POST /api/characters/:id/sleep, POST /api/girlfriends/:id/sleep
+- Measurements/LiftCapacity: seed tölti; külön CRUD nincs, ha kell, addj hozzá.
+
+Gyors sorrend Insomniában
+1) Admin: Create activity + subactivities (STR)
+2) User: Create character (gender megadva) -> measurement auto
+3) Admin: Create girlfriend, User: assign a karakterhez
+4) GET /api/activities
+5) POST execute (charId + subId, optional girlfriendId) -> nézd a progress/description/message
+6) Ha XP tele: POST /sleep (karakter/girlfriend) -> szintlépés
+7) Futass magasabb szintű subactivity-t újra (növelt STR-rel)
