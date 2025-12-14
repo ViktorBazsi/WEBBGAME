@@ -1,0 +1,61 @@
+AUTH
+- POST /api/auth/register { username, email, password }
+- POST /api/auth/login { email, password }
+- GET /api/auth/me (Bearer token)
+
+USERS
+- GET /api/users (admin-only ideally) — listázás
+
+CHARACTERS
+- POST /api/characters { name, gender, stats?: { str,dex,int,char,sta }, locationId? }
+- GET /api/characters — saját karakterek
+- GET /api/characters/:id
+- PATCH /api/characters/:id { name?, gender?, stats?, locationId?, time?, currentTime? }
+- DELETE /api/characters/:id
+- POST /api/characters/:id/sleep — 8 órát alszik, stat szintlépés ha XP tele, stamina refill, idő +8h
+- GET /api/characters/:id/lifts — STR/gender alapján lift capacity
+- JOB assign: POST /api/characters/:id/jobs { jobId }
+- JOB unassign: DELETE /api/characters/:id/jobs/:jobId (progress marad)
+- JOB work: POST /api/characters/:id/jobs/:jobId/work — XP/pénz/stamina/idő, promotionAvailable flag
+- JOB promote: POST /api/characters/:id/jobs/:jobId/promote — ha promotionAvailable és XP elég, átkapcsol következő szintű jobra, progress carry
+- ACTIVITY execute: POST /api/activities/:charId/subactivities/:subId/execute { girlfriendId? } — XP/stat XP, stamina/idő fogyasztás (length), message/description, promotion jelzések
+
+GIRLFRIENDS
+- POST /api/girlfriends { name, characterId?, stats?, locationId? } (admin)
+- GET /api/girlfriends — saját karakterhez kötött + orphan ha engedélyezett
+- GET /api/girlfriends/:id
+- PATCH /api/girlfriends/:id { name?, characterId?, stats?, locationId? } (admin)
+- DELETE /api/girlfriends/:id (admin)
+- ASSIGN to character: POST /api/girlfriends/:id/assign { characterId }
+- JOB assign: POST /api/girlfriends/:id/jobs { jobId }
+- JOB unassign: DELETE /api/girlfriends/:id/jobs/:jobId (progress marad)
+- JOB work: POST /api/girlfriends/:id/jobs/:jobId/work — XP/pénz (girMoney), stamina/idő a barátnőn, promotionAvailable flag
+- JOB promote: POST /api/girlfriends/:id/jobs/:jobId/promote — ha promotionAvailable és XP elég, átkapcsol következő szintű jobra
+- SLEEP: POST /api/girlfriends/:id/sleep — 8 óra, stat szintlépés, stamina refill, barátnő ideje nő
+- LIFTS: GET /api/girlfriends/:id/lifts
+
+ACTIVITIES / SUBACTIVITIES
+- ACTIVITY CRUD (admin create/update/delete): 
+  - POST /api/activities { name, description?, img?, length? (nem használjuk), location? }
+  - GET /api/activities, GET /api/activities/:id
+  - PATCH /api/activities/:id, DELETE /api/activities/:id
+- SUBACTIVITY CRUD (admin create/update/delete):
+  - POST /api/activities/:id/subactivities { name, type (STR/DEX/INT/CHAR/STA), xpGained, xpNeeded, description?, length?, staminaCost?, reward?, level? }
+  - GET /api/activities/:id/subactivities, GET /api/activities/:id/subactivities/:subId
+  - PATCH /api/activities/:id/subactivities/:subId, DELETE /api/activities/:id/subactivities/:subId
+- EXECUTE subactivity: POST /api/activities/:charId/subactivities/:subId/execute { girlfriendId? }
+  - Növeli stat XP-t, job XP-t nem, stamina/idő fogyaszt, promotionAvailable/stat warnings jelzés, description kitöltés measurement/lift placeholderrel.
+
+JOBS
+- Job CRUD (admin): POST /api/jobs, GET /api/jobs, GET /api/jobs/:id, PATCH /api/jobs/:id, DELETE /api/jobs/:id
+- Assign/Unassign/Work/Promote endpointok lásd karakter/girlfriend szekciókban.
+
+TESZT INPUT TIPPEK
+- Regisztráció/login: használj egy usert (pl. tester@mail.com), DB-ben role=ADMIN ha admin műveletekhez kell.
+- Karakter létrehozás: { "name":"Hero", "gender":"MALE", "stats": { "str":1,"dex":1,"int":1,"char":1,"sta":1 } }
+- Barátnő létrehozás: { "name":"Anna", "stats": { "str":1,"dex":1,"int":1,"char":1,"sta":1 }, "characterId": null }
+- Subactivity (pl. Treadmill Run): { "name":"Treadmill Run", "type":"STA", "xpGained":20, "xpNeeded":60, "staminaCost":1, "length":30, "description":"[name] fut [distanceKm] km-t." }
+- Work példák: 
+  - Character: POST /characters/{charId}/jobs/{jobId}/work
+  - Girlfriend: POST /girlfriends/{gfId}/jobs/{jobId}/work
+  - Ha `promotionAvailable: true`, hívd a promote endpointot.

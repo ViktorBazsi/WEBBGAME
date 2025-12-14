@@ -1,6 +1,7 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
+import { advanceTime, formatHHMM } from "../utils/time.helper.js";
 
 export const listCharacters = async (userId) => {
   const chars = await prisma.character.findMany({
@@ -9,6 +10,7 @@ export const listCharacters = async (userId) => {
       stats: { include: { measurement: true } },
       girlfriends: true,
       jobs: true,
+      jobProgress: { include: { job: true } },
       location: true,
     },
   });
@@ -27,6 +29,7 @@ export const getCharacter = async (userId, id) => {
       stats: { include: { measurement: true } },
       girlfriends: true,
       jobs: true,
+      jobProgress: { include: { job: true } },
       location: true,
     },
   });
@@ -100,7 +103,7 @@ export const updateCharacter = async (userId, id, payload) => {
   const updated = await prisma.character.update({
     where: { id },
     data: rest,
-    include: { stats: true, girlfriends: true, jobs: true, location: true },
+    include: { stats: true, girlfriends: true, jobs: true, jobProgress: { include: { job: true } }, location: true },
   });
 
   if (stats && updated.stats.length) {
@@ -141,6 +144,65 @@ export const deleteCharacter = async (userId, id) => {
 export const assignJobToCharacter = async (userId, characterId, jobId, isAdmin) => {
   const character = await prisma.character.findFirst({
     where: isAdmin ? { id: characterId } : { id: characterId, userId },
+    include: { stats: true, achievements: true },
+  });
+  if (!character) throw new HttpError("Karakter nem található", 404);
+
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new HttpError("Munka nem található", 404);
+
+  // stat követelmények
+  const stats = character.stats?.[0];
+  const statRequirements = [
+    { key: "str", value: job.str },
+    { key: "dex", value: job.dex },
+    { key: "int", value: job.int },
+    { key: "char", value: job.char },
+  ];
+  for (const req of statRequirements) {
+    if (req.value != null && (stats?.[req.key] ?? 0) < req.value) {
+      throw new HttpError(`Nincs meg a szükséges ${req.key.toUpperCase()} (${req.value}) ehhez a munkához`, 400);
+    }
+  }
+
+  // achievement requirement
+  if (job.requirement) {
+    const hasReq = (character.achievements ?? []).some(
+      (a) => a.name?.toLowerCase() === job.requirement.toLowerCase(),
+    );
+    if (!hasReq) {
+      throw new HttpError(`Nincs meg a követelmény: ${job.requirement}`, 400);
+    }
+  }
+
+  // entry level xp gate: meglévő progress kell hozzá
+  const existingProgress = await prisma.characterJobProgress.findUnique({
+    where: { characterId_jobId: { characterId, jobId } },
+  });
+  const progressXp = existingProgress?.currentXp ?? 0;
+  if ((job.entryLevelXp ?? 0) > progressXp) {
+    throw new HttpError(
+      `Nem kezdheted el ezt a munkát, legalább ${job.entryLevelXp} job XP kell hozzá`,
+      400,
+    );
+  }
+
+  await prisma.characterJobProgress.upsert({
+    where: { characterId_jobId: { characterId, jobId } },
+    update: {},
+    create: { characterId, jobId },
+  });
+
+  return prisma.character.update({
+    where: { id: characterId },
+    data: { jobs: { connect: { id: jobId } } },
+    include: { jobs: true },
+  });
+};
+
+export const unassignJobFromCharacter = async (userId, characterId, jobId, isAdmin = false) => {
+  const character = await prisma.character.findFirst({
+    where: isAdmin ? { id: characterId } : { id: characterId, userId },
   });
   if (!character) throw new HttpError("Karakter nem található", 404);
 
@@ -149,7 +211,7 @@ export const assignJobToCharacter = async (userId, characterId, jobId, isAdmin) 
 
   return prisma.character.update({
     where: { id: characterId },
-    data: { jobs: { connect: { id: jobId } } },
+    data: { jobs: { disconnect: { id: jobId } } },
     include: { jobs: true },
   });
 };
@@ -219,6 +281,14 @@ export const sleepAndLevelUp = async (userId, characterId, isAdmin = false) => {
   await prisma.stats.update({
     where: { id: stats.id },
     data: { currentStamina: updates.sta ?? stats.sta ?? 1 },
+  });
+
+  // alvás 8 óra (480 perc)
+  const sleepDuration = 480;
+  const advanced = advanceTime(character.time, sleepDuration, character.day);
+  await prisma.character.update({
+    where: { id: character.id },
+    data: { time: advanced.minutes, currentTime: advanced.formatted, day: advanced.day },
   });
 
   return getCharacter(userId, characterId);

@@ -1,6 +1,7 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
+import { advanceTime, formatHHMM } from "../utils/time.helper.js";
 
 const ensureCharacterOwnership = async (userId, characterId, isAdmin = false) => {
   const character = await prisma.character.findFirst({
@@ -37,7 +38,13 @@ const syncMeasurementForStats = async (statsRecord, gender = "FEMALE") => {
 export const listGirlfriends = async (userId) => {
   const gfs = await prisma.girlfriend.findMany({
     where: { character: { userId } },
-    include: { stats: { include: { measurement: true } }, character: true, jobs: true, location: true },
+    include: {
+      stats: { include: { measurement: true } },
+      character: true,
+      jobs: true,
+      jobProgress: { include: { job: true } },
+      location: true,
+    },
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
@@ -49,7 +56,13 @@ export const listGirlfriends = async (userId) => {
 
 export const listAllGirlfriends = async () => {
   const gfs = await prisma.girlfriend.findMany({
-    include: { stats: { include: { measurement: true } }, character: true, jobs: true, location: true },
+    include: {
+      stats: { include: { measurement: true } },
+      character: true,
+      jobs: true,
+      jobProgress: { include: { job: true } },
+      location: true,
+    },
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
@@ -62,7 +75,13 @@ export const listAllGirlfriends = async () => {
 export const listAvailableSingles = async () => {
   const gfs = await prisma.girlfriend.findMany({
     where: { characterId: null },
-    include: { stats: { include: { measurement: true } }, character: true, jobs: true, location: true },
+    include: {
+      stats: { include: { measurement: true } },
+      character: true,
+      jobs: true,
+      jobProgress: { include: { job: true } },
+      location: true,
+    },
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
@@ -76,14 +95,20 @@ export const getGirlfriend = async (userId, id, { allowOrphan = false, isAdmin =
   const gf = await prisma.girlfriend.findFirst({
     where: isAdmin
       ? { id }
-      : {
-          id,
-          OR: [
-            { character: { userId } },
-            ...(allowOrphan ? [{ characterId: null }] : []),
-          ],
-        },
-    include: { stats: { include: { measurement: true } }, character: true, jobs: true, location: true },
+        : {
+            id,
+            OR: [
+              { character: { userId } },
+              ...(allowOrphan ? [{ characterId: null }] : []),
+            ],
+          },
+    include: {
+      stats: { include: { measurement: true } },
+      character: true,
+      jobs: true,
+      jobProgress: { include: { job: true } },
+      location: true,
+    },
   });
   if (!gf) throw new HttpError("Barátnő nem található", 404);
   if (gf.stats && gf.stats[0]) {
@@ -188,7 +213,7 @@ export const assignJobToGirlfriend = async (userId, girlfriendId, jobId, isAdmin
     where: isAdmin
       ? { id: girlfriendId }
       : { id: girlfriendId, character: { userId } },
-    include: { character: true },
+    include: { character: true, stats: true, achievements: true },
   });
   if (!gf) throw new HttpError("Barátnő nem található vagy nincs jogosultság", 404);
   if (!gf.characterId) {
@@ -198,9 +223,66 @@ export const assignJobToGirlfriend = async (userId, girlfriendId, jobId, isAdmin
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job) throw new HttpError("Munka nem található", 404);
 
+  const stats = gf.stats?.[0];
+  const statRequirements = [
+    { key: "str", value: job.str },
+    { key: "dex", value: job.dex },
+    { key: "int", value: job.int },
+    { key: "char", value: job.char },
+  ];
+  for (const req of statRequirements) {
+    if (req.value != null && (stats?.[req.key] ?? 0) < req.value) {
+      throw new HttpError(`Nincs meg a szükséges ${req.key.toUpperCase()} (${req.value}) ehhez a munkához`, 400);
+    }
+  }
+
+  if (job.requirement) {
+    const hasReq = (gf.achievements ?? []).some(
+      (a) => a.name?.toLowerCase() === job.requirement.toLowerCase(),
+    );
+    if (!hasReq) {
+      throw new HttpError(`Nincs meg a követelmény: ${job.requirement}`, 400);
+    }
+  }
+
+  const existingProgress = await prisma.girlfriendJobProgress.findUnique({
+    where: { girlfriendId_jobId: { girlfriendId: gf.id, jobId } },
+  });
+  const progressXp = existingProgress?.currentXp ?? 0;
+  if ((job.entryLevelXp ?? 0) > progressXp) {
+    throw new HttpError(
+      `Nem kezdheted el ezt a munkát, legalább ${job.entryLevelXp} job XP kell hozzá`,
+      400,
+    );
+  }
+
+  await prisma.girlfriendJobProgress.upsert({
+    where: { girlfriendId_jobId: { girlfriendId: gf.id, jobId } },
+    update: {},
+    create: { girlfriendId: gf.id, jobId },
+  });
+
   return prisma.girlfriend.update({
     where: { id: gf.id },
     data: { jobs: { connect: { id: jobId } } },
+    include: { jobs: true },
+  });
+};
+
+export const unassignJobFromGirlfriend = async (userId, girlfriendId, jobId, isAdmin = false) => {
+  const gf = await prisma.girlfriend.findFirst({
+    where: isAdmin
+      ? { id: girlfriendId }
+      : { id: girlfriendId, character: { userId } },
+  });
+  if (!gf) throw new HttpError("Barátnő nem található vagy nincs jogosultság", 404);
+
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new HttpError("Munka nem található", 404);
+
+  return prisma.girlfriend.update({
+    where: { id: gf.id },
+    data: { jobs: { disconnect: { id: jobId } } },
     include: { jobs: true },
   });
 };
@@ -274,6 +356,14 @@ export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = 
   await prisma.stats.update({
     where: { id: stats.id },
     data: { currentStamina: updates.sta ?? stats.sta ?? 1 },
+  });
+
+  // alvás 8 óra (480 perc) a barátnő saját idején
+  const sleepDuration = 480;
+  const advanced = advanceTime(gf.time ?? 0, sleepDuration, gf.day ?? "Monday");
+  await prisma.girlfriend.update({
+    where: { id: gf.id },
+    data: { time: advanced.minutes, currentTime: advanced.formatted, day: advanced.day },
   });
 
   return getGirlfriend(userId, girlfriendId, { isAdmin: true, allowOrphan: true });

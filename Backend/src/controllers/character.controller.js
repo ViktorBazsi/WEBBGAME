@@ -8,6 +8,8 @@ import {
   getLiftCapacity,
   sleepAndLevelUp,
 } from "../services/character.service.js";
+import { unassignJobFromCharacter } from "../services/character.service.js";
+import { workJobForCharacter, promoteJobForCharacter } from "../services/job.service.js";
 
 export const getAllCharacters = async (req, res, next) => {
   try {
@@ -65,6 +67,16 @@ export const addJobForCharacter = async (req, res, next) => {
   }
 };
 
+export const removeJobForCharacter = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await unassignJobFromCharacter(req.user.id, req.params.id, req.params.jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 export const getCharacterLifts = async (req, res, next) => {
   try {
     const isAdmin = req.user?.role === "ADMIN";
@@ -79,6 +91,26 @@ export const sleepCharacter = async (req, res, next) => {
   try {
     const isAdmin = req.user?.role === "ADMIN";
     const data = await sleepAndLevelUp(req.user.id, req.params.id, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const workCharacterJob = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await workJobForCharacter(req.user.id, req.params.id, req.params.jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const promoteCharacterJob = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await promoteJobForCharacter(req.user.id, req.params.id, req.params.jobId, isAdmin);
     return res.json(data);
   } catch (err) {
     return next(err);

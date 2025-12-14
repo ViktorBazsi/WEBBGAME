@@ -1,6 +1,7 @@
 import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
+import { advanceTime, formatHHMM } from "../utils/time.helper.js";
 
 export const listActivities = () =>
   prisma.activity.findMany({ include: { location: true, subActivities: true } });
@@ -104,6 +105,8 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   const type = sub.type?.toUpperCase();
   const xpGain = sub.xpGained ?? 0;
   const staminaCost = sub.staminaCost ?? 1;
+  const isMeasurementSub = (sub.name || "").toLowerCase().includes("measure");
+  const durationMinutes = sub.length ?? 30;
 
   if (!type || !["STR", "DEX", "INT", "CHAR", "STA"].includes(type)) {
     throw new HttpError("SubActivity type nincs beállítva vagy érvénytelen", 400);
@@ -166,6 +169,29 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     data: updateData,
   });
 
+  // idő fogyasztása: performer szintű
+  if (durationMinutes > 0) {
+    if (girlfriend) {
+      const advanced = advanceTime(girlfriend.time ?? character.time, durationMinutes, girlfriend.day ?? character.day);
+      await prisma.girlfriend.update({
+        where: { id: girlfriend.id },
+        data: { time: advanced.minutes, currentTime: advanced.formatted, day: advanced.day },
+      });
+      girlfriend.time = advanced.minutes;
+      girlfriend.currentTime = advanced.formatted;
+      girlfriend.day = advanced.day;
+    } else {
+      const advanced = advanceTime(character.time, durationMinutes, character.day);
+      await prisma.character.update({
+        where: { id: character.id },
+        data: { time: advanced.minutes, currentTime: advanced.formatted, day: advanced.day },
+      });
+      character.time = advanced.minutes; // lokális frissítés
+      character.currentTime = advanced.formatted;
+      character.day = advanced.day;
+    }
+  }
+
   const updatedCharacter = await prisma.character.findUnique({
     where: { id: character.id },
     include: { stats: { include: { measurement: true } } },
@@ -188,6 +214,15 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   if (staminaCost) {
     message += ` Stamina költség: ${staminaCost}, maradék: ${staminaAfter}.`;
   }
+  const timeAfterMinutes = girlfriend
+    ? updatedGirlfriend?.time ?? girlfriend.time ?? character.time
+    : updatedCharacter?.time ?? character.time;
+  const timeAfterFormatted = girlfriend
+    ? updatedGirlfriend?.currentTime ?? girlfriend.currentTime ?? formatHHMM(timeAfterMinutes)
+    : updatedCharacter?.currentTime ?? character.currentTime ?? formatHHMM(timeAfterMinutes);
+  if (durationMinutes > 0) {
+    message += ` Jelenlegi idő: ${timeAfterFormatted}.`;
+  }
   const measurementGender = girlfriend
     ? updatedGirlfriend?.stats?.[0]?.measurement?.gender
     : updatedCharacter?.stats?.[0]?.measurement?.gender;
@@ -198,7 +233,6 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     ? updatedGirlfriend?.stats?.[0]?.measurement
     : updatedCharacter?.stats?.[0]?.measurement;
   let filledDescription = sub.description || "";
-  const isMeasurementSub = sub.name.toLowerCase().includes("measure");
   if (!isMeasurementSub && measurementGender !== undefined) {
     const capacity = await prisma.liftCapacity.findFirst({
       where: { strLevel, gender: measurementGender },
@@ -329,5 +363,6 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
       currentXp: newXp,
       neededXp,
     },
+    time: { minutes: timeAfterMinutes, formatted: timeAfterFormatted },
   };
 };

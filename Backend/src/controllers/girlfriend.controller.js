@@ -10,6 +10,8 @@ import {
   getGirlfriendLiftCapacity,
   sleepAndLevelUpGirlfriend,
 } from "../services/girlfriend.service.js";
+import { workJobForGirlfriend, promoteJobForGirlfriend } from "../services/job.service.js";
+import { unassignJobFromGirlfriend } from "../services/girlfriend.service.js";
 
 export const getAllGirlfriends = async (req, res, next) => {
   try {
@@ -104,6 +106,16 @@ export const addJobForGirlfriend = async (req, res, next) => {
   }
 };
 
+export const removeJobForGirlfriend = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === "ADMIN";
+    const data = await unassignJobFromGirlfriend(req.user.id, req.params.id, req.params.jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 export const getGirlfriendLifts = async (req, res, next) => {
   try {
     const isAdmin = req.user.role === "ADMIN";
@@ -118,6 +130,26 @@ export const sleepGirlfriend = async (req, res, next) => {
   try {
     const isAdmin = req.user.role === "ADMIN";
     const data = await sleepAndLevelUpGirlfriend(req.user.id, req.params.id, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const workGirlfriendJob = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === "ADMIN";
+    const data = await workJobForGirlfriend(req.user.id, req.params.id, req.params.jobId, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const promoteGirlfriendJob = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === "ADMIN";
+    const data = await promoteJobForGirlfriend(req.user.id, req.params.id, req.params.jobId, isAdmin);
     return res.json(data);
   } catch (err) {
     return next(err);

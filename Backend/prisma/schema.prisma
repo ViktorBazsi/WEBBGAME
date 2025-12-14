@@ -30,13 +30,17 @@ model Character {
   userId      String
   user        User          @relation(fields: [userId], references: [id])
 
-  money       Int           @default(500)
+  charMoney   Int           @default(500)
+  householdMoney Int        @default(500)
   day         String        @default("Monday")
-  time        Int           @default(8)
+  time        Int           @default(480)
+  currentTime String        @default("08:00")
 
   stats       Stats[]
   girlfriends Girlfriend[]
   jobs        Job[]         @relation("CharacterJobs")
+  jobProgress CharacterJobProgress[]
+  achievements Achievement[] @relation("CharacterAchievements")
 
   locationId  String?
   location    Location?     @relation(fields: [locationId], references: [id])
@@ -76,8 +80,15 @@ model Girlfriend {
   characterId String?
   character   Character?    @relation(fields: [characterId], references: [id])
 
+  girMoney    Int           @default(500)
+  day         String        @default("Monday")
+  time        Int           @default(480)
+  currentTime String        @default("08:00")
+
   stats       Stats[]
   jobs        Job[]         @relation("GirlfriendJobs")
+  jobProgress GirlfriendJobProgress[]
+  achievements Achievement[] @relation("GirlfriendAchievements")
 
   corruption  Int           @default(0)
   affection   Int           @default(50)
@@ -91,12 +102,18 @@ model Job {
   name        String
   jobType     String         @default("general")
   requirement String?
+  description String?
   entryLevelXp Int           @default(0)
   str         Int?
   dex         Int?
   int         Int?
   char        Int?
+  staminaCost Int            @default(0)
   spec        String?
+  strXp       Int?
+  staXp       Int?
+  intXp       Int?
+  charXp      Int?
 
   level       Int            @default(1)
   xpNeeded    Int            @default(50)          
@@ -107,6 +124,44 @@ model Job {
   
   characters  Character[]    @relation("CharacterJobs")
   girlfriends Girlfriend[]   @relation("GirlfriendJobs")
+  characterProgress CharacterJobProgress[]
+  girlfriendProgress GirlfriendJobProgress[]
+}
+
+model Achievement {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  characters  Character[]   @relation("CharacterAchievements")
+  girlfriends Girlfriend[]  @relation("GirlfriendAchievements")
+
+  @@unique([name])
+}
+
+model CharacterJobProgress {
+  id           String     @id @default(cuid())
+  characterId  String
+  jobId        String
+  level        Int        @default(1)
+  currentXp    Int        @default(0)
+
+  character    Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  job          Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, jobId])
+}
+
+model GirlfriendJobProgress {
+  id            String     @id @default(cuid())
+  girlfriendId  String
+  jobId         String
+  level         Int        @default(1)
+  currentXp     Int        @default(0)
+
+  girlfriend    Girlfriend @relation(fields: [girlfriendId], references: [id], onDelete: Cascade)
+  job           Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([girlfriendId, jobId])
 }
 
 model Activity {
@@ -116,7 +171,6 @@ model Activity {
   @@unique([name])
   description String?
   img         String?
-  length      Int
   location    Location []  @relation("LocationActivity")
   subActivities SubActivity[]
 }
@@ -149,6 +203,7 @@ model SubActivity {
   xpGained     Int?       @default(10)
   reward       Int?
   staminaCost  Int?       @default(1)
+  length       Int?       @default(30) // perc
 
   @@unique([activityId, name])
 }
