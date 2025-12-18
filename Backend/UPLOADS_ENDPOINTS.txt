@@ -1,0 +1,64 @@
+Kepfeltoltes es kepkezeles URL-ek
+
+Altalanos
+- Minden feltoltes multipart/form-data, a fajl mezoneve: image
+- Autentikacio kotelezo (Bearer token)
+- Feltoltott kepek statikusan elerhetok: /uploads/...
+- Mentett eleresi utvonal mindig rel. /uploads/<mappa>/<fajl>
+
+Statikus kepek
+GET /uploads/<mappa>/<fajl>
+- A feltoltott kep kozvetlen elerese
+- Mappak: locations, activities, jobs, characters, girlfriends, subactivity-images
+
+Alap entitas kepek (location, activity, job, character, girlfriend)
+POST /api/uploads/:entity/:id
+- Feltoltes/replace
+- entity lehet: locations, activities, jobs, characters, girlfriends
+- characters/girlfriends eseteben KOTELEZO: stage=1..5 (query vagy body)
+- locations/activities/jobs admin jogosultsag kell
+- characters/girlfriends tulaj vagy admin
+
+GET /api/uploads/:entity/:id
+- Kep(ek) lekerese
+- characters/girlfriends: images tomb (5 elem, ures string ha nincs)
+- locations/activities/jobs: img mezoben egyetlen kep utvonala vagy null
+
+DELETE /api/uploads/:entity/:id
+- Kep torlese
+- characters/girlfriends: KOTELEZO stage=1..5, adott index ures stringre all
+- locations/activities/jobs: img null
+
+SubActivity-specifikus kepek (cel: character/girlfriend + strLevel)
+POST /api/uploads/subactivities/:subId/images
+- Feltoltes/replace subactivity-hez egy adott celhoz es STR szinthez
+- Parameterek: targetType=character|girlfriend, targetId=<id>, strLevel=<number>
+- Ha ugyanarra a subActivity+target+strLevel kombinaciora van kep, felulirja es torli a regi fajlt
+
+GET /api/uploads/subactivities/:subId/images
+- Egyetlen kep lekerese
+- Query/body: targetType, targetId, strLevel
+- Valasz: path (vagy null)
+
+DELETE /api/uploads/subactivities/:subId/images
+- Egyetlen kep torlese
+- Query/body: targetType, targetId, strLevel
+- Torli a DB rekordot es a fajlt is
+
+Peldak
+- Character STR=3 kep feltoltes:
+  POST /api/uploads/characters/<characterId>?stage=3
+
+- Girlfriend STR=5 kep feltoltes:
+  POST /api/uploads/girlfriends/<girlfriendId>?stage=5
+
+- Activity kep feltoltes (admin):
+  POST /api/uploads/activities/<activityId>
+
+- SubActivity kep feltoltes girlfriend + STR=3:
+  POST /api/uploads/subactivities/<subId>/images?targetType=girlfriend&targetId=<girlfriendId>&strLevel=3
+
+Megjegyzesek
+- A feltoltott fajlok a Backend/uploads/* mappaba kerulnek.
+- A stage-es kepek sorrendje STR szinthez van kotve (1..5).
+- SubActivity kepek a subactivity-images mappaba mennek.

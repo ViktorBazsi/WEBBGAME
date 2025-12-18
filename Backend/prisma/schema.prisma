@@ -35,12 +35,14 @@ model Character {
   day         String        @default("Monday")
   time        Int           @default(480)
   currentTime String        @default("08:00")
+  images      String[]      @default([])
 
   stats       Stats[]
   girlfriends Girlfriend[]
   jobs        Job[]         @relation("CharacterJobs")
   jobProgress CharacterJobProgress[]
   achievements Achievement[] @relation("CharacterAchievements")
+  subActivityImages SubActivityImage[]
 
   locationId  String?
   location    Location?     @relation(fields: [locationId], references: [id])
@@ -84,11 +86,13 @@ model Girlfriend {
   day         String        @default("Monday")
   time        Int           @default(480)
   currentTime String        @default("08:00")
+  images      String[]      @default([])
 
   stats       Stats[]
   jobs        Job[]         @relation("GirlfriendJobs")
   jobProgress GirlfriendJobProgress[]
   achievements Achievement[] @relation("GirlfriendAchievements")
+  subActivityImages SubActivityImage[]
 
   corruption  Int           @default(0)
   affection   Int           @default(50)
@@ -101,6 +105,7 @@ model Job {
   id          String         @id @default(cuid())
   name        String
   jobType     String         @default("general")
+  img         String?
   requirement String?
   description String?
   entryLevelXp Int           @default(0)
@@ -198,6 +203,7 @@ model SubActivity {
   type         String?
   requirement  String?
   description  String?
+  images       SubActivityImage[]
   level        Int?       @default(1)
   xpNeeded     Int?       @default(50)
   xpGained     Int?       @default(10)
@@ -206,6 +212,23 @@ model SubActivity {
   length       Int?       @default(30) // perc
 
   @@unique([activityId, name])
+}
+
+model SubActivityImage {
+  id            String      @id @default(cuid())
+  subActivityId String
+  subActivity   SubActivity @relation(fields: [subActivityId], references: [id], onDelete: Cascade)
+
+  characterId   String?
+  character     Character?  @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  girlfriendId  String?
+  girlfriend    Girlfriend? @relation(fields: [girlfriendId], references: [id], onDelete: Cascade)
+
+  strLevel      Int
+  img           String
+
+  @@unique([subActivityId, characterId, strLevel])
+  @@unique([subActivityId, girlfriendId, strLevel])
 }
 
 model Measurements {
