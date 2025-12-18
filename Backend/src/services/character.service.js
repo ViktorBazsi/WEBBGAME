@@ -94,11 +94,36 @@ export const createCharacter = async (userId, payload) => {
   return getCharacter(userId, created.id);
 };
 
-export const updateCharacter = async (userId, id, payload) => {
-  const existing = await prisma.character.findFirst({ where: { id, userId } });
+const upsertMeasurementForStats = async (statsId, measurement = {}, gender, strLevelFallback = 1) => {
+  const existing = await prisma.stats.findUnique({
+    where: { id: statsId },
+    select: { measurementId: true, str: true },
+  });
+  const targetStr = measurement.strLevel ?? existing?.str ?? strLevelFallback;
+  if (existing?.measurementId) {
+    await prisma.measurements.update({
+      where: { id: existing.measurementId },
+      data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+    });
+    return existing.measurementId;
+  }
+  const created = await prisma.measurements.create({
+    data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+  });
+  await prisma.stats.update({
+    where: { id: statsId },
+    data: { measurementId: created.id },
+  });
+  return created.id;
+};
+
+export const updateCharacter = async (userId, id, payload, isAdmin = false) => {
+  const existing = await prisma.character.findFirst({
+    where: isAdmin ? { id } : { id, userId },
+  });
   if (!existing) throw new HttpError("Karakter nem található", 404);
 
-  const { stats, ...rest } = payload;
+  const { stats, measurement, ...rest } = payload;
 
   const updated = await prisma.character.update({
     where: { id },
@@ -117,6 +142,9 @@ export const updateCharacter = async (userId, id, payload) => {
     });
     const level = stats.str ?? updated.stats[0].str ?? 1;
     await setMeasurementForStats(updated.stats[0].id, level, updated.gender);
+    if (measurement) {
+      await upsertMeasurementForStats(updated.stats[0].id, measurement, updated.gender);
+    }
   } else if (stats) {
     await prisma.stats.create({
       data: { ...stats, characterId: updated.id },
@@ -128,7 +156,12 @@ export const updateCharacter = async (userId, id, payload) => {
     if (newStats) {
       const level = stats.str ?? 1;
       await setMeasurementForStats(newStats.id, level, updated.gender);
+      if (measurement) {
+        await upsertMeasurementForStats(newStats.id, measurement, updated.gender);
+      }
     }
+  } else if (measurement && updated.stats[0]) {
+    await upsertMeasurementForStats(updated.stats[0].id, measurement, updated.gender);
   }
 
   return getCharacter(userId, id);

@@ -51,6 +51,7 @@ export const attachImageToEntity = async ({ entity, id, stage, user, file }) => 
     while (images.length < (config.stageCount ?? 5)) {
       images.push("");
     }
+    const oldPath = images[targetStage - 1];
     images[targetStage - 1] = relativePath;
 
     const updated = await config.model.update({
@@ -59,6 +60,9 @@ export const attachImageToEntity = async ({ entity, id, stage, user, file }) => 
       select: { id: true, [config.field]: true },
     });
 
+    if (oldPath && oldPath !== relativePath) {
+      await deleteFileIfExists(oldPath);
+    }
     return {
       entity: normalized,
       id,
@@ -68,11 +72,15 @@ export const attachImageToEntity = async ({ entity, id, stage, user, file }) => 
     };
   }
 
+  const oldPath = record?.[config.field];
   const updated = await config.model.update({
     where: { id },
     data: { [config.field]: relativePath },
     select: { id: true, [config.field]: true },
   });
+  if (oldPath && oldPath !== relativePath) {
+    await deleteFileIfExists(oldPath);
+  }
 
   return {
     entity: normalized,

@@ -40,7 +40,8 @@ export const postCharacter = async (req, res, next) => {
 
 export const patchCharacter = async (req, res, next) => {
   try {
-    const character = await updateCharacter(req.user.id, req.params.id, req.body);
+    const isAdmin = req.user?.role === "ADMIN";
+    const character = await updateCharacter(req.user.id, req.params.id, req.body, isAdmin);
     return res.json(character);
   } catch (err) {
     return next(err);

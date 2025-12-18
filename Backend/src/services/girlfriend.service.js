@@ -21,6 +21,29 @@ const setMeasurementForStats = async (statsId, strLevel = 1, gender = "FEMALE") 
   }
 };
 
+const upsertMeasurementForStats = async (statsId, measurement = {}, gender = "FEMALE") => {
+  const existing = await prisma.stats.findUnique({
+    where: { id: statsId },
+    select: { measurementId: true, str: true },
+  });
+  const targetStr = measurement.strLevel ?? existing?.str ?? 1;
+  if (existing?.measurementId) {
+    await prisma.measurements.update({
+      where: { id: existing.measurementId },
+      data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+    });
+    return existing.measurementId;
+  }
+  const created = await prisma.measurements.create({
+    data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+  });
+  await prisma.stats.update({
+    where: { id: statsId },
+    data: { measurementId: created.id },
+  });
+  return created.id;
+};
+
 const syncMeasurementForStats = async (statsRecord, gender = "FEMALE") => {
   if (!statsRecord) return statsRecord;
   const strLevel = statsRecord.str ?? 1;
@@ -148,7 +171,7 @@ export const createGirlfriend = async (userId, payload) => {
 
 export const updateGirlfriend = async (userId, id, payload) => {
   const gf = await getGirlfriend(userId, id, { isAdmin: true });
-  const { stats, characterId, ...rest } = payload;
+  const { stats, characterId, measurement, ...rest } = payload;
 
   if (characterId && characterId !== gf.characterId) {
     await ensureCharacterOwnership(userId, characterId, true);
@@ -170,6 +193,9 @@ export const updateGirlfriend = async (userId, id, payload) => {
     });
     const level = stats.str ?? gf.stats[0].str ?? 1;
     await setMeasurementForStats(gf.stats[0].id, level, "FEMALE");
+    if (measurement) {
+      await upsertMeasurementForStats(gf.stats[0].id, measurement, "FEMALE");
+    }
   } else if (stats) {
     await prisma.stats.create({
       data: { ...stats, girlfriendId: gf.id },
@@ -181,7 +207,12 @@ export const updateGirlfriend = async (userId, id, payload) => {
     if (newStats) {
       const level = stats.str ?? 1;
       await setMeasurementForStats(newStats.id, level, "FEMALE");
+      if (measurement) {
+        await upsertMeasurementForStats(newStats.id, measurement, "FEMALE");
+      }
     }
+  } else if (measurement && gf.stats[0]) {
+    await upsertMeasurementForStats(gf.stats[0].id, measurement, "FEMALE");
   }
 
   return getGirlfriend(userId, id, { isAdmin: true, allowOrphan: true });

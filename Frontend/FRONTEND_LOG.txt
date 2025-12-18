@@ -1,0 +1,35 @@
+Frontend állapot – jelenlegi funkciók
+
+Technológia
+- Vite + React + Tailwind 3.3.5
+- Axios alapú API kliens, Formik + Yup formkezelés
+- Auth context (JWT token localStorage), ProtectedRoute
+- Modal rendszer: info/error/confirm
+
+Oldalak / flow
+- Auth: Login és Register (Formik + Yup, hibák modalban)
+- Game: Location alapú háttér, hoverre megjelenő panelek
+  - Bal panel (hover): karakter, location, activity, barátnő választó + subactivity lista (Char/GF indítás)
+  - Jobb panel (hover): karakter és barátnő részletes státusz (stamina, pénz, statok, measurement-ek), tippek
+  - Location háttér kitölti a nézetet, karakter/barátnő sprite-ok stage alapján, magasságra arányosítva, enyhe átfedéssel
+  - Subactivity futtatás (Char vagy GF gomb), SLEEP típus a backendben sleep logikára kötve
+- Admin Dashboard (csak ADMIN):
+  - CRUD: Location, Activity, SubActivity, Character, Girlfriend
+  - Assign: Activity to Location
+  - Image upload: locations/activities/jobs/characters/girlfriends + subactivity target (character/gf + STR) – fájlválasztó komponens
+  - Edit: statok + pénz + measurement (height, weight, biceps, chest, quads, calves, back) karakter és barátnő esetén
+
+Stílus
+- Dark, üveges panelek, hoverre ki-be csúszó sávok
+- Egyedi select/file input, modern tipográfia (Space Grotesk, Manrope)
+- Sprite kiemelés: jobb oldali infó hoverre drop-shadow a megfelelő figurán
+
+Konfiguráció
+- API base: `VITE_API_BASE_URL` (.env): jelenleg http://localhost:8080
+- Token kulcs: `webgame_token` localStorage
+
+Ismert függőségek / mappák
+- `Frontend/src/services` – axios endpoint réteg
+- `Frontend/src/contexts` – Auth, Modal
+- `Frontend/src/pages` – auth/game/admin oldalak
+- `Frontend/src/components` – layout, ui, modals

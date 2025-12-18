@@ -2,6 +2,8 @@ import prisma from "../models/prisma-client.js";
 import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 import { advanceTime, formatHHMM } from "../utils/time.helper.js";
+import { sleepAndLevelUp } from "./character.service.js";
+import { sleepAndLevelUpGirlfriend } from "./girlfriend.service.js";
 
 export const listActivities = () =>
   prisma.activity.findMany({ include: { location: true, subActivities: true } });
@@ -103,6 +105,14 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   let performerStats = await ensureStatsWithMeasurement(performer, Boolean(girlfriend));
 
   const type = sub.type?.toUpperCase();
+  if (type === "SLEEP") {
+    if (girlfriend) {
+      const result = await sleepAndLevelUpGirlfriend(userId, girlfriend.id, isAdmin);
+      return { message: `${girlfriend.name} aludt és feltöltődött.`, girlfriend: result };
+    }
+    const result = await sleepAndLevelUp(userId, character.id, isAdmin);
+    return { message: `${character.name} aludt és feltöltődött.`, character: result };
+  }
   const xpGain = sub.xpGained ?? 0;
   const staminaCost = sub.staminaCost ?? 1;
   const isMeasurementSub = (sub.name || "").toLowerCase().includes("measure");
