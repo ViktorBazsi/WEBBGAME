@@ -8,6 +8,7 @@ import {
   removeCharacter,
   addJobForCharacter,
   getCharacterLifts,
+  getCharacterEndurance,
   sleepCharacter,
   workCharacterJob,
   removeJobForCharacter,
@@ -27,6 +28,7 @@ router.delete("/:id/jobs/:jobId", removeJobForCharacter);
 router.post("/:id/jobs/:jobId/work", workCharacterJob);
 router.post("/:id/jobs/:jobId/promote", promoteCharacterJob);
 router.get("/:id/lifts", getCharacterLifts);
+router.get("/:id/endurance", getCharacterEndurance);
 router.post("/:id/sleep", sleepCharacter);
 
 export default router;

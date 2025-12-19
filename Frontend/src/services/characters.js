@@ -19,3 +19,13 @@ export const deleteCharacter = async (id) => {
   const { data } = await apiClient.delete(`/api/characters/${id}`);
   return data;
 };
+
+export const fetchCharacterLifts = async (id) => {
+  const { data } = await apiClient.get(`/api/characters/${id}/lifts`);
+  return data;
+};
+
+export const fetchCharacterEndurance = async (id) => {
+  const { data } = await apiClient.get(`/api/characters/${id}/endurance`);
+  return data;
+};

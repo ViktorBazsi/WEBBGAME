@@ -6,6 +6,7 @@ import {
   deleteCharacter,
   assignJobToCharacter,
   getLiftCapacity,
+  getEnduranceCapacity,
   sleepAndLevelUp,
 } from "../services/character.service.js";
 import { unassignJobFromCharacter } from "../services/character.service.js";
@@ -82,6 +83,16 @@ export const getCharacterLifts = async (req, res, next) => {
   try {
     const isAdmin = req.user?.role === "ADMIN";
     const data = await getLiftCapacity(req.user.id, req.params.id, isAdmin);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const getCharacterEndurance = async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const data = await getEnduranceCapacity(req.user.id, req.params.id, isAdmin);
     return res.json(data);
   } catch (err) {
     return next(err);

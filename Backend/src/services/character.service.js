@@ -3,6 +3,13 @@ import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 import { advanceTime, formatHHMM } from "../utils/time.helper.js";
 
+const scaleLiftTier = (level, baseFactor, highFactor, breakpoint = 5) => {
+  const steps = Math.max(0, (level ?? 1) - 1);
+  const baseSteps = Math.min(breakpoint - 1, steps);
+  const highSteps = Math.max(0, steps - (breakpoint - 1));
+  return Math.pow(baseFactor, baseSteps) * Math.pow(highFactor, highSteps);
+};
+
 export const listCharacters = async (userId) => {
   const chars = await prisma.character.findMany({
     where: { userId },
@@ -14,12 +21,14 @@ export const listCharacters = async (userId) => {
       location: true,
     },
   });
+  const result = [];
   for (const c of chars) {
     if (c.stats && c.stats[0]) {
-      c.stats[0] = await syncMeasurementForStats(c.stats[0], c.gender);
+      c.stats[0] = await ensureStatsWithMeasurement(c, false);
     }
+    result.push(c);
   }
-  return chars;
+  return result;
 };
 
 export const getCharacter = async (userId, id) => {
@@ -35,7 +44,7 @@ export const getCharacter = async (userId, id) => {
   });
   if (!character) throw new HttpError("Karakter nem található", 404);
   if (character.stats && character.stats[0]) {
-    character.stats[0] = await syncMeasurementForStats(character.stats[0], character.gender);
+    character.stats[0] = await ensureStatsWithMeasurement(character, false);
   }
   return character;
 };
@@ -259,12 +268,69 @@ export const getLiftCapacity = async (userId, characterId, isAdmin = false) => {
   const strLevel = stats?.str ?? 0;
   const gender = stats?.measurement?.gender;
 
-  const capacity = await prisma.liftCapacity.findFirst({
-    where: { strLevel, gender },
-  });
-  if (!capacity) throw new HttpError("Nincs definiálva emelési adat erre a STR szintre", 404);
+  const baseCapacity =
+    (await prisma.liftCapacity.findFirst({
+      where: gender ? { gender } : {},
+      orderBy: { strLevel: "asc" },
+    })) || null;
+  if (!baseCapacity) throw new HttpError("Nincs definiálva emelési adat", 404);
+  const growth =
+    (await prisma.liftGrowth.findFirst({
+      where: gender ? { gender } : {},
+    })) || {};
+  const baseFactor = growth.bicepsCurlFactor || 1.15;
+  const benchFactor = growth.benchPressFactor || 1.15;
+  const squatFactor = growth.squatFactor || 1.15;
+  const latFactor = growth.latPulldownFactor || 1.15;
+  const scaleCurl = scaleLiftTier(strLevel, baseFactor, 1.2);
+  const scaleBench = scaleLiftTier(strLevel, benchFactor, 1.2);
+  const scaleSquat = scaleLiftTier(strLevel, squatFactor, 1.2);
+  const scaleLat = scaleLiftTier(strLevel, latFactor, 1.2);
+  const capacity = {
+    ...baseCapacity,
+    bicepsCurl: baseCapacity.bicepsCurl ? Math.round(baseCapacity.bicepsCurl * scaleCurl * 10) / 10 : null,
+    benchPress: baseCapacity.benchPress ? Math.round(baseCapacity.benchPress * scaleBench * 10) / 10 : null,
+    squat: baseCapacity.squat ? Math.round(baseCapacity.squat * scaleSquat * 10) / 10 : null,
+    latPulldown: baseCapacity.latPulldown ? Math.round(baseCapacity.latPulldown * scaleLat * 10) / 10 : null,
+  };
 
-  return { characterId, strLevel, gender, capacity };
+  return { characterId, strLevel, gender, capacity, base: baseCapacity };
+};
+
+export const getEnduranceCapacity = async (userId, characterId, isAdmin = false) => {
+  const character = await prisma.character.findFirst({
+    where: isAdmin ? { id: characterId } : { id: characterId, userId },
+    include: { stats: { include: { measurement: true } } },
+  });
+  if (!character) throw new HttpError("Karakter nem található vagy nincs jogosultság", 404);
+  const stats = await ensureStatsWithMeasurement(character, false);
+  const staLevel = stats?.sta ?? 1;
+  const gender = stats?.measurement?.gender;
+
+  const baseEndurance =
+    (await prisma.enduranceCapacity.findFirst({
+      where: gender ? { gender } : {},
+      orderBy: { staLevel: "asc" },
+    })) || null;
+  if (!baseEndurance) throw new HttpError("Nincs definiálva endurance adat", 404);
+  const growth =
+    (await prisma.enduranceGrowth.findFirst({
+      where: gender ? { gender } : {},
+    })) || {};
+  const scale = Math.pow(growth.distanceFactor || 1.1, Math.max(0, staLevel - 1));
+  const capacity = {
+    distanceKm: baseEndurance.distanceKm ? Math.round(baseEndurance.distanceKm * scale * 10) / 10 : null,
+    timeMinutes: baseEndurance.timeMinutes ? Math.round(baseEndurance.timeMinutes * scale * 10) / 10 : null,
+  };
+  const speedKmh = capacity.distanceKm ?? null;
+  const baseSpeedKmh = baseEndurance.distanceKm ?? null;
+  return {
+    characterId,
+    staLevel,
+    gender,
+    capacity: { ...capacity, speedKmh },
+    base: { ...baseEndurance, speedKmh: baseSpeedKmh },
+  };
 };
 
 export const sleepAndLevelUp = async (userId, characterId, isAdmin = false) => {

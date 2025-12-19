@@ -14,6 +14,7 @@ import {
   workGirlfriendJob,
   removeJobForGirlfriend,
   promoteGirlfriendJob,
+  getGirlfriendEndurance,
 } from "../controllers/girlfriend.controller.js";
 
 const router = Router();
@@ -31,6 +32,7 @@ router.delete("/:id/jobs/:jobId", removeJobForGirlfriend);
 router.post("/:id/jobs/:jobId/work", workGirlfriendJob);
 router.post("/:id/jobs/:jobId/promote", promoteGirlfriendJob);
 router.get("/:id/lifts", getGirlfriendLifts);
+router.get("/:id/endurance", getGirlfriendEndurance);
 router.post("/:id/sleep", sleepGirlfriend);
 
 export default router;

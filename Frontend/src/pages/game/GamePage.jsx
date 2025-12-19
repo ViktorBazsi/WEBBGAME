@@ -6,7 +6,7 @@ import Select from "../../components/ui/Select.jsx";
 import { useModal } from "../../contexts/ModalContext.jsx";
 import { fetchLocations } from "../../services/locations.js";
 import { fetchSubActivities, executeSubActivity } from "../../services/activities.js";
-import { fetchCharacters } from "../../services/characters.js";
+import { fetchCharacters, fetchCharacterLifts, fetchCharacterEndurance } from "../../services/characters.js";
 import { fetchGirlfriends } from "../../services/girlfriends.js";
 import { API_BASE_URL } from "../../constants/api.js";
 import { extractErrorMessage } from "../../services/apiClient.js";
@@ -27,6 +27,8 @@ export default function GamePage() {
   const [selectedGirlfriendId, setSelectedGirlfriendId] = useState("");
   const [loading, setLoading] = useState(true);
   const [highlight, setHighlight] = useState("");
+  const [liftCapacity, setLiftCapacity] = useState(null);
+  const [enduranceCapacity, setEnduranceCapacity] = useState(null);
 
   useEffect(() => {
     const loadInitial = async () => {
@@ -83,16 +85,17 @@ export default function GamePage() {
     [characters, selectedCharacterId]
   );
 
-  const getStageIndex = (stats) => {
+  const getStageIndex = (stats, totalStages = 1) => {
     const str = stats?.str ?? 1;
-    const stage = Math.max(1, Math.min(5, Math.round(str)));
+    const maxIdx = Math.max(1, totalStages);
+    const stage = Math.max(1, Math.min(maxIdx, Math.floor(str)));
     return stage - 1;
   };
 
   const getCharacterImage = () => {
     if (!selectedCharacter?.images?.length) return null;
-    const idx = getStageIndex(selectedCharacter.stats?.[0]);
-    return selectedCharacter.images[idx] || selectedCharacter.images.find(Boolean) || null;
+    const idx = getStageIndex(selectedCharacter.stats?.[0], selectedCharacter.images.length);
+    return selectedCharacter.images[idx] || null;
   };
 
   const availableGirlfriends = useMemo(
@@ -110,11 +113,17 @@ export default function GamePage() {
 
   const getGirlfriendImage = () => {
     if (!selectedGirlfriend?.images?.length) return null;
-    const idx = getStageIndex(selectedGirlfriend.stats?.[0]);
-    return selectedGirlfriend.images[idx] || selectedGirlfriend.images.find(Boolean) || null;
+    const idx = getStageIndex(selectedGirlfriend.stats?.[0], selectedGirlfriend.images.length);
+    return selectedGirlfriend.images[idx] || null;
   };
-  const charHeightCm = selectedCharacter?.stats?.[0]?.measurement?.height ?? null;
-  const gfHeightCm = selectedGirlfriend?.stats?.[0]?.measurement?.height ?? null;
+  const charHeightCm =
+    selectedCharacter?.stats?.[0]?.measurementScaled?.height ??
+    selectedCharacter?.stats?.[0]?.measurement?.height ??
+    null;
+  const gfHeightCm =
+    selectedGirlfriend?.stats?.[0]?.measurementScaled?.height ??
+    selectedGirlfriend?.stats?.[0]?.measurement?.height ??
+    null;
   const baseHeight = Math.max(charHeightCm || 0, gfHeightCm || 0, 175);
 
   const scaleHeight = (heightCm, fallback = 60, bias = 1) => {
@@ -132,6 +141,20 @@ export default function GamePage() {
       setSelectedGirlfriendId("");
     }
   }, [selectedCharacterId, availableGirlfriends]);
+
+  useEffect(() => {
+    if (!selectedCharacterId) {
+      setLiftCapacity(null);
+      setEnduranceCapacity(null);
+      return;
+    }
+    fetchCharacterLifts(selectedCharacterId)
+      .then((res) => setLiftCapacity(res?.capacity || null))
+      .catch(() => setLiftCapacity(null));
+    fetchCharacterEndurance(selectedCharacterId)
+      .then((res) => setEnduranceCapacity(res?.capacity || null))
+      .catch(() => setEnduranceCapacity(null));
+  }, [selectedCharacterId, selectedCharacter?.stats?.[0]?.str, selectedCharacter?.stats?.[0]?.sta]);
 
   const locationImg = selectedLocation?.img
     ? selectedLocation.img.startsWith("http")
@@ -342,11 +365,25 @@ export default function GamePage() {
                   <p>STA: {selectedCharacter?.stats?.[0]?.sta ?? "-"}</p>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-white/50">
-                  <p>Weight: {selectedCharacter?.stats?.[0]?.measurement?.weight ?? "-"}</p>
-                  <p>Height: {selectedCharacter?.stats?.[0]?.measurement?.height ?? "-"}</p>
-                  <p>Biceps: {selectedCharacter?.stats?.[0]?.measurement?.biceps ?? "-"}</p>
-                  <p>Chest: {selectedCharacter?.stats?.[0]?.measurement?.chest ?? "-"}</p>
+                  <p>Weight: {selectedCharacter?.stats?.[0]?.measurementScaled?.weight ?? selectedCharacter?.stats?.[0]?.measurement?.weight ?? "-"}</p>
+                  <p>Height: {selectedCharacter?.stats?.[0]?.measurementScaled?.height ?? selectedCharacter?.stats?.[0]?.measurement?.height ?? "-"}</p>
+                  <p>Biceps: {selectedCharacter?.stats?.[0]?.measurementScaled?.biceps ?? selectedCharacter?.stats?.[0]?.measurement?.biceps ?? "-"}</p>
+                  <p>Chest: {selectedCharacter?.stats?.[0]?.measurementScaled?.chest ?? selectedCharacter?.stats?.[0]?.measurement?.chest ?? "-"}</p>
                 </div>
+                {liftCapacity ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-white/50">
+                    <p>BicepsCurl: {liftCapacity.bicepsCurl ?? "-"}</p>
+                    <p>Bench: {liftCapacity.benchPress ?? "-"}</p>
+                    <p>Squat: {liftCapacity.squat ?? "-"}</p>
+                    <p>LatPulldown: {liftCapacity.latPulldown ?? "-"}</p>
+                  </div>
+                ) : null}
+                {enduranceCapacity ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-white/50">
+                    <p>Distance (km/1h): {enduranceCapacity.distanceKm ?? "-"}</p>
+                    <p>Speed (km/h): {enduranceCapacity.speedKmh ?? enduranceCapacity.distanceKm ?? "-"}</p>
+                  </div>
+                ) : null}
               </div>
               <div
                 className="rounded-2xl border border-white/10 px-3 py-2 transition duration-200 hover:border-ember/60"
@@ -367,10 +404,10 @@ export default function GamePage() {
                   <p>STA: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.sta ?? "-"}</p>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-white/50">
-                  <p>Weight: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.weight ?? "-"}</p>
-                  <p>Height: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.height ?? "-"}</p>
-                  <p>Biceps: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.biceps ?? "-"}</p>
-                  <p>Chest: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.chest ?? "-"}</p>
+                  <p>Weight: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurementScaled?.weight ?? availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.weight ?? "-"}</p>
+                  <p>Height: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurementScaled?.height ?? availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.height ?? "-"}</p>
+                  <p>Biceps: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurementScaled?.biceps ?? availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.biceps ?? "-"}</p>
+                  <p>Chest: {availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurementScaled?.chest ?? availableGirlfriends.find((g) => g.id === selectedGirlfriendId)?.stats?.[0]?.measurement?.chest ?? "-"}</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 px-3 py-2">

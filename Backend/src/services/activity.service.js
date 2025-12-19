@@ -239,15 +239,31 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
   const strLevel = girlfriend
     ? updatedGirlfriend?.stats?.[0]?.str ?? 0
     : updatedCharacter?.stats?.[0]?.str ?? 0;
-  const performerMeasurement = girlfriend
-    ? updatedGirlfriend?.stats?.[0]?.measurement
-    : updatedCharacter?.stats?.[0]?.measurement;
+  const performerMeasurement =
+    (girlfriend ? updatedGirlfriend?.stats?.[0]?.measurementScaled : updatedCharacter?.stats?.[0]?.measurementScaled) ??
+    (girlfriend ? updatedGirlfriend?.stats?.[0]?.measurement : updatedCharacter?.stats?.[0]?.measurement);
   let filledDescription = sub.description || "";
   if (!isMeasurementSub && measurementGender !== undefined) {
-    const capacity = await prisma.liftCapacity.findFirst({
-      where: { strLevel, gender: measurementGender },
-    });
-    if (capacity) {
+    const baseLift =
+      (await prisma.liftCapacity.findFirst({
+        where: measurementGender ? { gender: measurementGender } : {},
+        orderBy: { strLevel: "asc" },
+      })) || null;
+    const growth =
+      (await prisma.liftGrowth.findFirst({
+        where: measurementGender ? { gender: measurementGender } : {},
+      })) || {};
+    if (baseLift) {
+      const scaleCurl = Math.pow(growth.bicepsCurlFactor || 1.1, Math.max(0, strLevel - 1));
+      const scaleBench = Math.pow(growth.benchPressFactor || 1.1, Math.max(0, strLevel - 1));
+      const scaleSquat = Math.pow(growth.squatFactor || 1.1, Math.max(0, strLevel - 1));
+      const scaleLat = Math.pow(growth.latPulldownFactor || 1.1, Math.max(0, strLevel - 1));
+      const capacity = {
+        bicepsCurl: baseLift.bicepsCurl ? Math.ceil(baseLift.bicepsCurl * scaleCurl) : null,
+        benchPress: baseLift.benchPress ? Math.ceil(baseLift.benchPress * scaleBench) : null,
+        squat: baseLift.squat ? Math.ceil(baseLift.squat * scaleSquat) : null,
+        latPulldown: baseLift.latPulldown ? Math.ceil(baseLift.latPulldown * scaleLat) : null,
+      };
       const map = {
         biceps: capacity.bicepsCurl,
         curl: capacity.bicepsCurl,
@@ -336,19 +352,24 @@ export const executeSubActivity = async (userId, characterId, subId, isAdmin = f
     ? updatedGirlfriend?.stats?.[0]?.sta
     : updatedCharacter?.stats?.[0]?.sta;
   if (staLevel != null) {
-    const endurance = await prisma.enduranceCapacity.findFirst({
-      where: {
-        staLevel,
-        gender: measurementGender,
-      },
-    });
-    if (endurance?.distanceKm != null) {
-      distanceText = `${endurance.distanceKm} km`;
+    const baseEndurance =
+      (await prisma.enduranceCapacity.findFirst({
+        where: measurementGender ? { gender: measurementGender } : {},
+        orderBy: { staLevel: "asc" },
+      })) || null;
+    const growth =
+      (await prisma.enduranceGrowth.findFirst({
+        where: measurementGender ? { gender: measurementGender } : {},
+      })) || {};
+    if (baseEndurance?.distanceKm != null) {
+      const scale = Math.pow(growth.distanceFactor || 1.1, Math.max(0, (staLevel ?? 1) - 1));
+      const dist = Math.ceil(baseEndurance.distanceKm * scale);
+      distanceText = `${dist} km`;
       message += ` Megtehető táv: ${distanceText}.`;
       const template = filledDescription || sub.description || "";
       const replacements = [
-        { token: "{{distanceKm}}", value: String(endurance.distanceKm) },
-        { token: "[distanceKm]", value: String(endurance.distanceKm) },
+        { token: "{{distanceKm}}", value: String(dist) },
+        { token: "[distanceKm]", value: String(dist) },
       ];
       let rendered = template;
       for (const r of replacements) {

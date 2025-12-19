@@ -19,3 +19,13 @@ export const deleteGirlfriend = async (id) => {
   const { data } = await apiClient.delete(`/api/girlfriends/${id}`);
   return data;
 };
+
+export const fetchGirlfriendLifts = async (id) => {
+  const { data } = await apiClient.get(`/api/girlfriends/${id}/lifts`);
+  return data;
+};
+
+export const fetchGirlfriendEndurance = async (id) => {
+  const { data } = await apiClient.get(`/api/girlfriends/${id}/endurance`);
+  return data;
+};

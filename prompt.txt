@@ -1,0 +1,112 @@
+# Prompt a masik AI-nak (ChatGPT/DeepSeek/Kling)
+
+## 1) Stack es logika rovid, pontos osszefoglalas
+
+Project:
+- Backend: Node.js + Express
+- DB: PostgreSQL + Prisma
+- Frontend: Vite + React + Tailwind
+
+Fo entitasok:
+- Character, Girlfriend, Stats, Measurements, MeasurementsGrowth, LiftCapacity, LiftGrowth, EnduranceCapacity, EnduranceGrowth
+- A Stats tartalmazza a STR/DEX/INT/CHAR/STA szinteket es a currentStamina-t.
+- Measurements a BASE mereteket tarolja (height, weight, biceps, chest, quads, calves, back).
+
+### Growth logika (sajat szamitas a backendben)
+
+A jatek nem a tablakbol olvas ki minden szintre elore beirt erteket.
+Csak a BASE (szint 1) ertek van eltarolva, es a growth factorok alapjan SZAMOL a backend.
+
+1) Measurements (meretek)
+- BASE: Measurements tabla (strLevel = 1, gender = MALE/FEMALE)
+- Growth: MeasurementsGrowth tabla (genderenkent)
+- Formula: scaled = ceil(base * factor^(strLevel-1))
+- Default faktorok (ha nincs growth rekord):
+  - weight, biceps, chest, quads, calves, back: 1.10 (10% / szint)
+  - height: 1.01 (1% / szint)
+
+2) LiftCapacity (emelheto sulyok)
+- BASE: LiftCapacity tabla (strLevel = 1, gender)
+- Growth: LiftGrowth tabla (genderenkent)
+- Formula (ketszintu):
+  - Szint 2-5: 15% / szint
+  - Szint 6-tol: 20% / szint
+  - scale = 1.15^(min(str-1,4)) * 1.20^(max(0, (str-1)-4))
+- Kimenet: 1 tizedesre kerekitve (Math.round(x*10)/10)
+
+3) EnduranceCapacity (allokepesseg)
+- BASE: EnduranceCapacity tabla (staLevel = 1, gender)
+- Growth: EnduranceGrowth tabla (genderenkent)
+- Formula: distanceKm = round(base * factor^(staLevel-1), 1 tizedes)
+- Sebesseg logika:
+  - A distanceKm erteke azt jelenti: ennyi km 1 ora alatt
+  - speedKmh = distanceKm (1 oras alapido)
+
+### Milyen adatok kellenek a seedhez?
+- Measurements: csak strLevel=1 base ertekek (MALE/FEMALE)
+- LiftCapacity: csak strLevel=1 base ertekek (MALE/FEMALE)
+- EnduranceCapacity: csak staLevel=1 base ertekek (MALE/FEMALE)
+- Growth tablak: factorok (MeasurementsGrowth, LiftGrowth, EnduranceGrowth)
+
+Feladat a masik AI-nak:
+Adj realis base ertekeket (male/female), es realis growth faktorokat. A cel: a skala szepen, realisan none, ne legyen tul gyors.
+
+
+## 2) Kepek generalasa (promptok)
+
+### Altalanos elvarasok
+- Teljes alak, frontalis vagy enyhen 3/4 nezet
+- Semleges hatter vagy transzparens (ha lehet PNG alpha), hogy jatekon belul ra lehessen helyezni a location kepre
+- Konzisztens kamera, perspektiva, fenyek (hogy a stage-ek kozt egységesnek tunjon)
+- Realista, de stilizalt (nem rajzfilm)
+- Outfit stage-enkent valtozhat, de legyen logikus a karakter fejlodesehez
+
+### A) Alap (casual) kepek stage-enkent
+Celpont: stage-enkent 1 teljes alakos kep, hetkoznapi ruhaban
+
+CHATGPT/KLING prompt sablon:
+"Full-body portrait of {gender} game character named {name}, age {age}, {height_cm} cm, {weight_kg} kg, physique: {physique_desc}, measurements: biceps {biceps_cm} cm, chest {chest_cm} cm, quads {quads_cm} cm, calves {calves_cm} cm, back {back_cm} cm. Str level {str_level}. Casual everyday outfit, clean modern style. Neutral background or transparent PNG. Consistent lighting and camera (full body, 3/4 view). High detail, realistic proportions."
+
+### B) Edzos kepek subactivity-hez kotve
+Celpont: subactivity-enkent es str-levelenkent 1 kep, ami a konkret gyakorlatot mutatja.
+
+Peldak:
+- Biceps curl
+- Bench press
+- Squat
+- Lat pulldown
+
+CHATGPT/KLING prompt sablon:
+"Full-body action shot of {gender} character {name}, {height_cm} cm, {weight_kg} kg, Str {str_level}. Performing {subactivity_name} with correct gym equipment. Show believable form based on lift capacity: biceps curl {bicepsCurl_kg} kg, bench press {benchPress_kg} kg, squat {squat_kg} kg, lat pulldown {latPulldown_kg} kg. Athletic outfit. Neutral/transparent background. Consistent camera and lighting with casual images."
+
+### C) Alvas (sleep) kepek
+Celpont: egy kep, ahol a karakter az agyban alszik (subactivity = sleep)
+
+CHATGPT/KLING prompt sablon:
+"Full-body or 3/4 body scene of {gender} character {name} sleeping in bed, relaxed posture, calm expression. Soft lighting. Neutral/transparent background (if possible). Simple night outfit. Consistent style and proportions with other images."
+
+
+## 3) DeepSeek promptok (ugyanez a logika, rovidebben)
+
+### Casual stage
+"{name}, {gender}, full-body, {height_cm}cm, {weight_kg}kg, Str {str_level}, casual outfit, realistic proportions, neutral/transparent background, consistent camera, high detail"
+
+### Workout subactivity
+"{name} {gender}, full-body action, {subactivity_name}, Str {str_level}, lift capacity: curl {bicepsCurl_kg}kg, bench {benchPress_kg}kg, squat {squat_kg}kg, lat pulldown {latPulldown_kg}kg, athletic outfit, neutral/transparent background"
+
+### Sleep
+"{name} {gender}, sleeping in bed, calm, soft light, simple night outfit, neutral/transparent background"
+
+
+## 4) Adat placeholder lista a promptokhoz
+- {name}
+- {gender}
+- {age}
+- {height_cm}
+- {weight_kg}
+- {biceps_cm}, {chest_cm}, {quads_cm}, {calves_cm}, {back_cm}
+- {str_level}
+- {subactivity_name}
+- {bicepsCurl_kg}, {benchPress_kg}, {squat_kg}, {latPulldown_kg}
+- {distance_km_per_hour} (endurance)
+- {physique_desc}

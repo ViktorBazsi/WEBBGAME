@@ -270,6 +270,39 @@ model EnduranceCapacity {
   @@unique([staLevel, gender])
 }
 
+model MeasurementsGrowth {
+  id            String  @id @default(cuid())
+  gender        Gender?
+  weightFactor  Float   @default(1.1)
+  heightFactor  Float   @default(1.01)
+  bicepsFactor  Float   @default(1.1)
+  chestFactor   Float   @default(1.1)
+  quadsFactor   Float   @default(1.1)
+  calvesFactor  Float   @default(1.1)
+  backFactor    Float   @default(1.1)
+
+  @@unique([gender])
+}
+
+model LiftGrowth {
+  id                String  @id @default(cuid())
+  gender            Gender?
+  bicepsCurlFactor  Float   @default(1.1)
+  benchPressFactor  Float   @default(1.1)
+  squatFactor       Float   @default(1.1)
+  latPulldownFactor Float   @default(1.1)
+
+  @@unique([gender])
+}
+
+model EnduranceGrowth {
+  id             String  @id @default(cuid())
+  gender         Gender?
+  distanceFactor Float   @default(1.1)
+
+  @@unique([gender])
+}
+
 enum StatType {
   STR
   DEX

@@ -14,6 +14,11 @@ export const deleteEntityImage = async (entity, id, stage) => {
   return data;
 };
 
+export const fetchEntityImages = async (entity, id) => {
+  const { data } = await apiClient.get(`/api/uploads/${entity}/${id}`);
+  return data;
+};
+
 export const uploadSubActivityImage = async (subId, payload, file) => {
   const form = new FormData();
   form.append("image", file);
@@ -25,5 +30,11 @@ export const uploadSubActivityImage = async (subId, payload, file) => {
 export const deleteSubActivityImage = async (subId, payload) => {
   const params = new URLSearchParams(payload).toString();
   const { data } = await apiClient.delete(`/api/uploads/subactivities/${subId}/images?${params}`);
+  return data;
+};
+
+export const fetchSubActivityImage = async (subId, payload) => {
+  const params = new URLSearchParams(payload).toString();
+  const { data } = await apiClient.get(`/api/uploads/subactivities/${subId}/images?${params}`);
   return data;
 };

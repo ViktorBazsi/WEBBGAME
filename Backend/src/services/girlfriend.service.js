@@ -3,6 +3,13 @@ import HttpError from "../utils/HttpError.js";
 import { ensureStatsWithMeasurement } from "../utils/stats.helper.js";
 import { advanceTime, formatHHMM } from "../utils/time.helper.js";
 
+const scaleLiftTier = (level, baseFactor, highFactor, breakpoint = 5) => {
+  const steps = Math.max(0, (level ?? 1) - 1);
+  const baseSteps = Math.min(breakpoint - 1, steps);
+  const highSteps = Math.max(0, steps - (breakpoint - 1));
+  return Math.pow(baseFactor, baseSteps) * Math.pow(highFactor, highSteps);
+};
+
 const ensureCharacterOwnership = async (userId, characterId, isAdmin = false) => {
   const character = await prisma.character.findFirst({
     where: isAdmin ? { id: characterId } : { id: characterId, userId },
@@ -11,51 +18,26 @@ const ensureCharacterOwnership = async (userId, characterId, isAdmin = false) =>
   return character;
 };
 
-const setMeasurementForStats = async (statsId, strLevel = 1, gender = "FEMALE") => {
-  const m = await prisma.measurements.findFirst({ where: { strLevel, gender } });
-  if (m) {
-    await prisma.stats.update({
-      where: { id: statsId },
-      data: { measurementId: m.id },
-    });
-  }
-};
-
-const upsertMeasurementForStats = async (statsId, measurement = {}, gender = "FEMALE") => {
-  const existing = await prisma.stats.findUnique({
+const upsertMeasurementBase = async (statsId, measurement = {}, gender = "FEMALE") => {
+  if (!measurement || !statsId) return null;
+  const statRecord = await prisma.stats.findUnique({
     where: { id: statsId },
-    select: { measurementId: true, str: true },
+    select: { measurementId: true },
   });
-  const targetStr = measurement.strLevel ?? existing?.str ?? 1;
-  if (existing?.measurementId) {
-    await prisma.measurements.update({
-      where: { id: existing.measurementId },
-      data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+  if (statRecord?.measurementId) {
+    return prisma.measurements.update({
+      where: { id: statRecord.measurementId },
+      data: { ...measurement, gender: measurement.gender ?? gender, strLevel: measurement.strLevel ?? 1 },
     });
-    return existing.measurementId;
   }
   const created = await prisma.measurements.create({
-    data: { ...measurement, gender: measurement.gender ?? gender, strLevel: targetStr },
+    data: { ...measurement, gender: measurement.gender ?? gender, strLevel: measurement.strLevel ?? 1 },
   });
   await prisma.stats.update({
     where: { id: statsId },
     data: { measurementId: created.id },
   });
-  return created.id;
-};
-
-const syncMeasurementForStats = async (statsRecord, gender = "FEMALE") => {
-  if (!statsRecord) return statsRecord;
-  const strLevel = statsRecord.str ?? 1;
-  const m = await prisma.measurements.findFirst({ where: { strLevel, gender } });
-  if (m && statsRecord.measurementId !== m.id) {
-    await prisma.stats.update({
-      where: { id: statsRecord.id },
-      data: { measurementId: m.id },
-    });
-    return { ...statsRecord, measurement: m };
-  }
-  return statsRecord;
+  return created;
 };
 
 export const listGirlfriends = async (userId) => {
@@ -71,7 +53,7 @@ export const listGirlfriends = async (userId) => {
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
-      g.stats[0] = await syncMeasurementForStats(g.stats[0], g.gender ?? "FEMALE");
+      g.stats[0] = await ensureStatsWithMeasurement(g, true);
     }
   }
   return gfs;
@@ -89,7 +71,7 @@ export const listAllGirlfriends = async () => {
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
-      g.stats[0] = await syncMeasurementForStats(g.stats[0], g.gender ?? "FEMALE");
+      g.stats[0] = await ensureStatsWithMeasurement(g, true);
     }
   }
   return gfs;
@@ -108,7 +90,7 @@ export const listAvailableSingles = async () => {
   });
   for (const g of gfs) {
     if (g.stats && g.stats[0]) {
-      g.stats[0] = await syncMeasurementForStats(g.stats[0], g.gender ?? "FEMALE");
+      g.stats[0] = await ensureStatsWithMeasurement(g, true);
     }
   }
   return gfs;
@@ -135,7 +117,7 @@ export const getGirlfriend = async (userId, id, { allowOrphan = false, isAdmin =
   });
   if (!gf) throw new HttpError("Barátnő nem található", 404);
   if (gf.stats && gf.stats[0]) {
-    gf.stats[0] = await syncMeasurementForStats(gf.stats[0], gf.gender ?? "FEMALE");
+    gf.stats[0] = await ensureStatsWithMeasurement(gf, true);
   }
   return gf;
 };
@@ -162,8 +144,7 @@ export const createGirlfriend = async (userId, payload) => {
   });
 
   if (created.stats && created.stats.length) {
-    const level = created.stats[0].str ?? 1;
-    await setMeasurementForStats(created.stats[0].id, level, "FEMALE");
+    await ensureStatsWithMeasurement(created, true);
   }
 
   return getGirlfriend(userId, created.id, { isAdmin: true, allowOrphan: true });
@@ -191,10 +172,8 @@ export const updateGirlfriend = async (userId, id, payload) => {
       where: { id: gf.stats[0].id },
       data: statsUpdate,
     });
-    const level = stats.str ?? gf.stats[0].str ?? 1;
-    await setMeasurementForStats(gf.stats[0].id, level, "FEMALE");
     if (measurement) {
-      await upsertMeasurementForStats(gf.stats[0].id, measurement, "FEMALE");
+      await upsertMeasurementBase(gf.stats[0].id, measurement, "FEMALE");
     }
   } else if (stats) {
     await prisma.stats.create({
@@ -205,14 +184,12 @@ export const updateGirlfriend = async (userId, id, payload) => {
       orderBy: { id: "desc" },
     });
     if (newStats) {
-      const level = stats.str ?? 1;
-      await setMeasurementForStats(newStats.id, level, "FEMALE");
       if (measurement) {
-        await upsertMeasurementForStats(newStats.id, measurement, "FEMALE");
+        await upsertMeasurementBase(newStats.id, measurement, "FEMALE");
       }
     }
   } else if (measurement && gf.stats[0]) {
-    await upsertMeasurementForStats(gf.stats[0].id, measurement, "FEMALE");
+    await upsertMeasurementBase(gf.stats[0].id, measurement, "FEMALE");
   }
 
   return getGirlfriend(userId, id, { isAdmin: true, allowOrphan: true });
@@ -331,12 +308,73 @@ export const getGirlfriendLiftCapacity = async (userId, girlfriendId, isAdmin = 
   const strLevel = stats?.str ?? 0;
   const gender = stats?.measurement?.gender;
 
-  const capacity = await prisma.liftCapacity.findFirst({
-    where: { strLevel, gender },
-  });
-  if (!capacity) throw new HttpError("Nincs definiálva emelési adat erre a STR szintre", 404);
+  const baseCapacity =
+    (await prisma.liftCapacity.findFirst({
+      where: gender ? { gender } : {},
+      orderBy: { strLevel: "asc" },
+    })) || null;
+  if (!baseCapacity) throw new HttpError("Nincs definiálva emelési adat", 404);
+  const growth =
+    (await prisma.liftGrowth.findFirst({
+      where: gender ? { gender } : {},
+    })) || {};
+  const curlFactor = growth.bicepsCurlFactor || 1.15;
+  const benchFactor = growth.benchPressFactor || 1.15;
+  const squatFactor = growth.squatFactor || 1.15;
+  const latFactor = growth.latPulldownFactor || 1.15;
+  const curlScale = scaleLiftTier(strLevel, curlFactor, 1.2);
+  const benchScale = scaleLiftTier(strLevel, benchFactor, 1.2);
+  const squatScale = scaleLiftTier(strLevel, squatFactor, 1.2);
+  const latScale = scaleLiftTier(strLevel, latFactor, 1.2);
+  const capacity = {
+    ...baseCapacity,
+    bicepsCurl: baseCapacity.bicepsCurl ? Math.round(baseCapacity.bicepsCurl * curlScale * 10) / 10 : null,
+    benchPress: baseCapacity.benchPress ? Math.round(baseCapacity.benchPress * benchScale * 10) / 10 : null,
+    squat: baseCapacity.squat ? Math.round(baseCapacity.squat * squatScale * 10) / 10 : null,
+    latPulldown: baseCapacity.latPulldown ? Math.round(baseCapacity.latPulldown * latScale * 10) / 10 : null,
+  };
 
-  return { girlfriendId, strLevel, gender, capacity };
+  return { girlfriendId, strLevel, gender, capacity, base: baseCapacity };
+};
+
+export const getGirlfriendEnduranceCapacity = async (userId, girlfriendId, isAdmin = false) => {
+  const gf = await prisma.girlfriend.findFirst({
+    where: isAdmin
+      ? { id: girlfriendId }
+      : { id: girlfriendId, character: { userId } },
+    include: { stats: { include: { measurement: true } } },
+  });
+  if (!gf) throw new HttpError("Barátnő nem található vagy nincs jogosultság", 404);
+
+  const stats = await ensureStatsWithMeasurement(gf, true);
+  const staLevel = stats?.sta ?? 1;
+  const gender = stats?.measurement?.gender;
+
+  const baseEndurance =
+    (await prisma.enduranceCapacity.findFirst({
+      where: gender ? { gender } : {},
+      orderBy: { staLevel: "asc" },
+    })) || null;
+  if (!baseEndurance) throw new HttpError("Nincs definiálva endurance adat", 404);
+  const growth =
+    (await prisma.enduranceGrowth.findFirst({
+      where: gender ? { gender } : {},
+    })) || {};
+  const scale = Math.pow(growth.distanceFactor || 1.1, Math.max(0, staLevel - 1));
+  const capacity = {
+    distanceKm: baseEndurance.distanceKm ? Math.round(baseEndurance.distanceKm * scale * 10) / 10 : null,
+    timeMinutes: baseEndurance.timeMinutes ? Math.round(baseEndurance.timeMinutes * scale * 10) / 10 : null,
+  };
+  const speedKmh = capacity.distanceKm ?? null;
+  const baseSpeedKmh = baseEndurance.distanceKm ?? null;
+
+  return {
+    girlfriendId,
+    staLevel,
+    gender,
+    capacity: { ...capacity, speedKmh },
+    base: { ...baseEndurance, speedKmh: baseSpeedKmh },
+  };
 };
 
 export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = false) => {
@@ -379,9 +417,6 @@ export const sleepAndLevelUpGirlfriend = async (userId, girlfriendId, isAdmin = 
       where: { id: stats.id },
       data: updates,
     });
-    // ha STR szintet léptünk, frissítsük a measurement-et az új szinthez (female)
-    const newStrLevel = updates.str ?? stats.str ?? 1;
-    await setMeasurementForStats(stats.id, newStrLevel, "FEMALE");
   }
 
   await prisma.stats.update({

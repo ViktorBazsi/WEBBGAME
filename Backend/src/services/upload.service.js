@@ -6,8 +6,8 @@ const ENTITY_CONFIG = {
   locations: { model: prisma.location, field: "img", requiresAdmin: true },
   activities: { model: prisma.activity, field: "img", requiresAdmin: true },
   jobs: { model: prisma.job, field: "img", requiresAdmin: true },
-  characters: { model: prisma.character, field: "images", staged: true, stageCount: 5 },
-  girlfriends: { model: prisma.girlfriend, field: "images", staged: true, stageCount: 5 },
+  characters: { model: prisma.character, field: "images", staged: true },
+  girlfriends: { model: prisma.girlfriend, field: "images", staged: true },
 };
 
 export const attachImageToEntity = async ({ entity, id, stage, user, file }) => {
@@ -42,13 +42,13 @@ export const attachImageToEntity = async ({ entity, id, stage, user, file }) => 
 
   if (config.staged) {
     const targetStage = Number.isFinite(stage) ? Number(stage) : null;
-    if (!targetStage || targetStage < 1 || targetStage > (config.stageCount ?? 5)) {
-      throw new HttpError(`Stage megadása kötelező 1-${config.stageCount ?? 5} között`, 400);
+    if (!targetStage || targetStage < 1) {
+      throw new HttpError("Stage megadása kötelező és minimum 1", 400);
     }
     const images = Array.isArray(record.images)
       ? [...record.images]
-      : Array(config.stageCount ?? 5).fill("");
-    while (images.length < (config.stageCount ?? 5)) {
+      : [];
+    while (images.length < targetStage) {
       images.push("");
     }
     const oldPath = images[targetStage - 1];
@@ -152,13 +152,13 @@ export const deleteImageFromEntity = async ({ entity, id, stage, user }) => {
 
   if (config.staged) {
     const targetStage = Number.isFinite(stage) ? Number(stage) : null;
-    if (!targetStage || targetStage < 1 || targetStage > (config.stageCount ?? 5)) {
-      throw new HttpError(`Stage megadása kötelező 1-${config.stageCount ?? 5} között`, 400);
+    if (!targetStage || targetStage < 1) {
+      throw new HttpError("Stage megadása kötelező és minimum 1", 400);
     }
     const images = Array.isArray(record.images)
       ? [...record.images]
-      : Array(config.stageCount ?? 5).fill("");
-    while (images.length < (config.stageCount ?? 5)) {
+      : [];
+    while (images.length < targetStage) {
       images.push("");
     }
     const oldPath = images[targetStage - 1];
